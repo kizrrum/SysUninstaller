@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Security.Principal;
 using System.ServiceProcess;
@@ -25,6 +26,24 @@ namespace InfoWatchUninstaller
         private Label lblStatus;
         private bool isRunning = false;
         private ToolTip toolTip;
+
+        // Переключатель: true – использовать службу, false – прямой запуск
+        private bool UseServiceMethod = true; // По умолчанию через службу
+
+        // Типы установщиков
+        private enum InstallerType
+        {
+            Unknown,
+            Msi,
+            InnoSetup,
+            NSIS,
+            Wise,
+            InstallAnywhere,
+            AdvancedInstaller,
+            WixBurn,
+            Adobe,
+            Cisco
+        }
 
         public MainForm()
         {
@@ -82,10 +101,10 @@ namespace InfoWatchUninstaller
                 WordWrap = true
             };
 
-            // --- Настройка подсказок ---
+            // --- Подсказки ---
             string productTooltip = "Введите часть названия продукта (или полное имя), по которому будет выполняться поиск в разделе Uninstall реестра.\nНапример: 'InfoWatch' или 'Kaspersky'.";
-            string serviceTooltip = "Имя службы Windows, которая будет временно использована для выполнения команды удаления.\nРекомендуется выбирать не критические службы (например, Spooler, upnphost, wuauserv).";
-            string commandTooltip = "Если поле не пустое, то вместо автоматической команды msiexec /x {GUID} будет выполнена эта команда.\nМожно указать полный путь к EXE, BAT, CMD с параметрами.\nПример: C:\\temp\\uninstall.bat /silent";
+            string serviceTooltip = "Имя службы Windows, которая будет временно использована для выполнения команды удаления.\nРекомендуется выбирать не критические службы (например, Spooler, upnphost, wuauserv).\nИспользуется только при методе через службу.";
+            string commandTooltip = "Если поле не пустое, то вместо автоматической команды будет выполнена эта команда.\nМожно указать полный путь к EXE, BAT, CMD с параметрами.\nПример: C:\\temp\\uninstall.bat /silent";
 
             txtProductName.MouseEnter += (s, e) => toolTip.Show(productTooltip, txtProductName);
             txtProductName.MouseLeave += (s, e) => toolTip.Hide(txtProductName);
@@ -99,7 +118,7 @@ namespace InfoWatchUninstaller
             toolTip.SetToolTip(btnBrowseCommand, "Открыть диалог выбора файла (EXE, BAT, CMD) и вставить его путь в поле команды.");
             toolTip.SetToolTip(nudMaxWait, "Максимальное время (в секундах), которое программа будет ожидать завершения деинсталляции.\nЕсли по истечении этого времени продукт всё ещё присутствует в системе, операция считается неудачной.");
             toolTip.SetToolTip(nudCheckInterval, "Интервал (в секундах) между проверками наличия продукта в реестре во время ожидания завершения удаления.");
-            toolTip.SetToolTip(btnUninstall, "Начать процесс деинсталляции. Будут выполнены:\n1) поиск GUID продукта,\n2) подмена ImagePath службы,\n3) запуск службы для выполнения команды,\n4) ожидание завершения,\n5) восстановление оригинального пути.");
+            toolTip.SetToolTip(btnUninstall, "Запустить процесс удаления продукта.");
             toolTip.SetToolTip(rtbLog, "Здесь отображаются все этапы выполнения операции с цветовой маркировкой.");
             toolTip.SetToolTip(lblStatus, "Текущее состояние операции.");
 
@@ -119,6 +138,7 @@ namespace InfoWatchUninstaller
             Controls.Add(rtbLog);
         }
 
+        // ---------- Обработчики ----------
         private void BtnBrowseCommand_Click(object sender, EventArgs e)
         {
             using (OpenFileDialog openFileDialog = new OpenFileDialog())
@@ -158,13 +178,24 @@ namespace InfoWatchUninstaller
             int maxWait = (int)nudMaxWait.Value;
             int checkInterval = (int)nudCheckInterval.Value;
 
-            if (string.IsNullOrEmpty(productName) || string.IsNullOrEmpty(serviceName))
+            if (string.IsNullOrEmpty(productName))
             {
-                MessageBox.Show("Заполните оба поля: имя продукта и службы.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Введите имя продукта.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
-            Thread worker = new Thread(() => RunUninstallViaService(productName, serviceName, customCommand, maxWait, checkInterval));
+            if (UseServiceMethod && string.IsNullOrEmpty(serviceName))
+            {
+                MessageBox.Show("При использовании метода через службу укажите имя службы.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            Thread worker;
+            if (UseServiceMethod)
+                worker = new Thread(() => RunUninstallViaService(productName, serviceName, customCommand, maxWait, checkInterval));
+            else
+                worker = new Thread(() => RunUninstallDirect(productName, customCommand, maxWait, checkInterval));
+
             worker.IsBackground = true;
             worker.Start();
         }
@@ -195,49 +226,182 @@ namespace InfoWatchUninstaller
             }
         }
 
-        // ---------- Вспомогательный класс для информации о продукте ----------
+        // ---------- Извлечение пути к EXE из UninstallString ----------
+        private string ExtractExePath(string uninstallString)
+        {
+            if (string.IsNullOrEmpty(uninstallString)) return null;
+            string trimmed = uninstallString.Trim();
+            if (trimmed.StartsWith("\""))
+            {
+                int endQuote = trimmed.IndexOf("\"", 1);
+                if (endQuote > 0)
+                    return trimmed.Substring(1, endQuote - 1);
+            }
+            else
+            {
+                int spaceIndex = trimmed.IndexOf(' ');
+                if (spaceIndex > 0)
+                    return trimmed.Substring(0, spaceIndex);
+                else
+                    return trimmed;
+            }
+            return null;
+        }
+
+        // ---------- Определение типа установщика ----------
+        private InstallerType DetectInstallerType(string uninstallString, RegistryKey subKey, string exePath)
+        {
+            if (string.IsNullOrEmpty(uninstallString))
+                return InstallerType.Unknown;
+
+            if (uninstallString.IndexOf("msiexec", StringComparison.OrdinalIgnoreCase) >= 0)
+                return InstallerType.Msi;
+
+            try
+            {
+                if (subKey?.GetValue("InnoSetupCodeFile") != null)
+                    return InstallerType.InnoSetup;
+
+                object publisher = subKey?.GetValue("Publisher");
+                if (publisher != null && publisher.ToString().StartsWith("NSIS:"))
+                    return InstallerType.NSIS;
+            }
+            catch { }
+
+            if (!string.IsNullOrEmpty(exePath))
+            {
+                string exeName = Path.GetFileName(exePath);
+                if (exeName.Equals("unins000.exe", StringComparison.OrdinalIgnoreCase))
+                    return InstallerType.InnoSetup;
+
+                if (exeName.Equals("uninstall.exe", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (uninstallString.IndexOf("-remove", StringComparison.OrdinalIgnoreCase) >= 0)
+                        return InstallerType.AdvancedInstaller;
+                    if (uninstallString.IndexOf("-silent", StringComparison.OrdinalIgnoreCase) >= 0)
+                        return InstallerType.Cisco;
+                    if (uninstallString.IndexOf("/S", StringComparison.OrdinalIgnoreCase) >= 0)
+                        return InstallerType.NSIS;
+                }
+
+                if (uninstallString.IndexOf(" /x", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    uninstallString.IndexOf(" -x", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return InstallerType.Wise;
+            }
+
+            if (!string.IsNullOrEmpty(exePath) && File.Exists(exePath))
+            {
+                try
+                {
+                    var versionInfo = FileVersionInfo.GetVersionInfo(exePath);
+                    if (versionInfo.Comments?.IndexOf("Inno Setup", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        versionInfo.FileDescription?.IndexOf("Inno", StringComparison.OrdinalIgnoreCase) >= 0)
+                        return InstallerType.InnoSetup;
+
+                    if (versionInfo.FileDescription?.IndexOf("NSIS", StringComparison.OrdinalIgnoreCase) >= 0)
+                        return InstallerType.NSIS;
+
+                    if (versionInfo.CompanyName?.IndexOf("Advanced Installer", StringComparison.OrdinalIgnoreCase) >= 0)
+                        return InstallerType.AdvancedInstaller;
+
+                    if (versionInfo.CompanyName?.IndexOf("Adobe", StringComparison.OrdinalIgnoreCase) >= 0)
+                        return InstallerType.Adobe;
+                }
+                catch { }
+            }
+
+            if (uninstallString.IndexOf("Adobe", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                (uninstallString.IndexOf("Uninstaller.exe", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 uninstallString.IndexOf("HDBox", StringComparison.OrdinalIgnoreCase) >= 0))
+                return InstallerType.Adobe;
+
+            return InstallerType.Unknown;
+        }
+
+        // ---------- Класс информации о продукте ----------
         private class ProductInfo
         {
             public string KeyName { get; set; }
             public string UninstallString { get; set; }
-            public bool IsMsi { get; set; }
+            public string QuietUninstallString { get; set; }
+            public string DisplayName { get; set; }
+            public InstallerType InstallerType { get; set; }
         }
 
-        // ---------- ПОИСК ПРОДУКТА В РЕЕСТРЕ (ОБА РАЗДЕЛА) С ПРИОРИТЕТОМ MSI ----------
+        // ---------- Поиск продукта в реестре (исправлен: игнорируем пустые DisplayName и пустые UninstallString) ----------
         private ProductInfo FindProductInfo(string productName)
         {
-            string[] uninstallPaths = {
-                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
-                @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
-            };
-
-            List<ProductInfo> found = new List<ProductInfo>();
-
-            foreach (string path in uninstallPaths)
+            // Явно открываем 64-битный и 32-битный реестр
+            using (RegistryKey baseKey64 = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64))
+            using (RegistryKey baseKey32 = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry32))
             {
-                using (RegistryKey root = Registry.LocalMachine.OpenSubKey(path))
+                string[] uninstallPaths = {
+            @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+            @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+        };
+
+                // Сначала ищем в 64-битном
+                foreach (string path in uninstallPaths)
                 {
-                    if (root == null) continue;
-                    foreach (string subKeyName in root.GetSubKeyNames())
+                    using (RegistryKey root = baseKey64.OpenSubKey(path))
                     {
-                        using (RegistryKey subKey = root.OpenSubKey(subKeyName))
+                        if (root == null) continue;
+                        foreach (string subKeyName in root.GetSubKeyNames())
                         {
-                            if (subKey == null) continue;
-                            object displayNameObj = subKey.GetValue("DisplayName");
-                            if (displayNameObj != null)
+                            using (RegistryKey subKey = root.OpenSubKey(subKeyName))
                             {
-                                string displayName = displayNameObj.ToString();
-                                if (displayName.IndexOf(productName, StringComparison.OrdinalIgnoreCase) >= 0)
+                                if (subKey == null) continue;
+                                string displayName = subKey.GetValue("DisplayName") as string;
+                                if (!string.IsNullOrEmpty(displayName) &&
+                                    displayName.IndexOf(productName, StringComparison.OrdinalIgnoreCase) >= 0)
                                 {
                                     string uninstallString = subKey.GetValue("UninstallString") as string;
-                                    bool isMsi = uninstallString != null &&
-                                                 uninstallString.IndexOf("msiexec", StringComparison.OrdinalIgnoreCase) >= 0;
-                                    found.Add(new ProductInfo
+                                    string quietUninstallString = subKey.GetValue("QuietUninstallString") as string;
+                                    string exePath = ExtractExePath(uninstallString);
+                                    InstallerType type = DetectInstallerType(uninstallString, subKey, exePath);
+
+                                    return new ProductInfo
                                     {
                                         KeyName = subKeyName,
                                         UninstallString = uninstallString,
-                                        IsMsi = isMsi
-                                    });
+                                        QuietUninstallString = quietUninstallString,
+                                        DisplayName = displayName,
+                                        InstallerType = type
+                                    };
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Если не нашли в 64, ищем в 32
+                foreach (string path in uninstallPaths)
+                {
+                    using (RegistryKey root = baseKey32.OpenSubKey(path))
+                    {
+                        if (root == null) continue;
+                        foreach (string subKeyName in root.GetSubKeyNames())
+                        {
+                            using (RegistryKey subKey = root.OpenSubKey(subKeyName))
+                            {
+                                if (subKey == null) continue;
+                                string displayName = subKey.GetValue("DisplayName") as string;
+                                if (!string.IsNullOrEmpty(displayName) &&
+                                    displayName.IndexOf(productName, StringComparison.OrdinalIgnoreCase) >= 0)
+                                {
+                                    string uninstallString = subKey.GetValue("UninstallString") as string;
+                                    string quietUninstallString = subKey.GetValue("QuietUninstallString") as string;
+                                    string exePath = ExtractExePath(uninstallString);
+                                    InstallerType type = DetectInstallerType(uninstallString, subKey, exePath);
+
+                                    return new ProductInfo
+                                    {
+                                        KeyName = subKeyName,
+                                        UninstallString = uninstallString,
+                                        QuietUninstallString = quietUninstallString,
+                                        DisplayName = displayName,
+                                        InstallerType = type
+                                    };
                                 }
                             }
                         }
@@ -245,76 +409,281 @@ namespace InfoWatchUninstaller
                 }
             }
 
-            if (found.Count == 0) return null;
-
-            // Сначала ищем MSI-ключи
-            var msiKey = found.FirstOrDefault(p => p.IsMsi);
-            if (msiKey != null) return msiKey;
-
-            // Если нет – берём первый попавшийся
-            return found[0];
+            return null;
         }
 
-        // ---------- ПРОВЕРКА УСТАНОВЛЕН ЛИ ПРОДУКТ ----------
+
+        // ---------- Проверка установки продукта ----------
         private bool IsProductInstalled(string productName)
         {
             return FindProductInfo(productName) != null;
         }
 
-        // ---------- МЕТОД ЧЕРЕЗ СЛУЖБУ ----------
+        // ---------- Построение команды ----------
+        private string BuildCommand(string productName, string customCommand)
+        {
+            if (!string.IsNullOrEmpty(customCommand))
+            {
+                AppendLog($"[*] Пользовательская команда: {customCommand}", Color.Cyan);
+                return customCommand;
+            }
+
+            var productInfo = FindProductInfo(productName);
+            if (productInfo == null)
+            {
+                AppendLog($"[WARN] Продукт '{productName}' не найден в реестре.", Color.Yellow);
+                return null;
+            }
+            AppendLog($"[*] Найден ключ: {productInfo.KeyName}", Color.Green);
+            AppendLog($"[*] DisplayName: {productInfo.DisplayName}", Color.Cyan);
+            AppendLog($"[*] Тип установщика: {productInfo.InstallerType}", Color.Cyan);
+
+            if (!string.IsNullOrEmpty(productInfo.QuietUninstallString))
+            {
+                AppendLog("[*] Используем QuietUninstallString", Color.Cyan);
+                return productInfo.QuietUninstallString;
+            }
+
+            string cmd = productInfo.UninstallString;
+            if (string.IsNullOrEmpty(cmd))
+            {
+                AppendLog("[ERROR] UninstallString пустая.", Color.Red);
+                return null;
+            }
+
+            switch (productInfo.InstallerType)
+            {
+                case InstallerType.Msi:
+                    if (cmd.IndexOf(" /I", StringComparison.OrdinalIgnoreCase) >= 0)
+                        cmd = cmd.Replace("/I", "/X");
+                    if (cmd.IndexOf("/quiet", StringComparison.OrdinalIgnoreCase) < 0 &&
+                        cmd.IndexOf("/qb", StringComparison.OrdinalIgnoreCase) < 0)
+                        cmd += " /quiet /norestart";
+                    else if (cmd.IndexOf("/norestart", StringComparison.OrdinalIgnoreCase) < 0)
+                        cmd += " /norestart";
+                    break;
+
+                case InstallerType.InnoSetup:
+                    if (!cmd.Contains("/VERYSILENT"))
+                        cmd += " /VERYSILENT /NORESTART";
+                    break;
+
+                case InstallerType.NSIS:
+                    if (!cmd.Contains("/S"))
+                        cmd += " /S";
+                    break;
+
+                case InstallerType.Wise:
+                    if (!cmd.Contains(" /s"))
+                        cmd += " /s";
+                    break;
+
+                case InstallerType.InstallAnywhere:
+                    if (!cmd.Contains("-i silent"))
+                        cmd += " -i silent";
+                    break;
+
+                case InstallerType.AdvancedInstaller:
+                    if (cmd.IndexOf("-remove", StringComparison.OrdinalIgnoreCase) >= 0)
+                        cmd = cmd.Replace("-remove", "/ex /quiet /norestart");
+                    else if (!cmd.Contains("/ex"))
+                        cmd += " /ex /quiet /norestart";
+                    break;
+
+                case InstallerType.WixBurn:
+                    if (!cmd.Contains("-uninstall"))
+                        cmd += " -uninstall -s -norestart";
+                    break;
+
+                case InstallerType.Adobe:
+                    if (!cmd.Contains("--silent") && !cmd.Contains("--mode="))
+                        cmd += " --silent";
+                    break;
+
+                case InstallerType.Cisco:
+                    if (!cmd.Contains("-silent"))
+                    {
+                        if (cmd.Contains("/S"))
+                            cmd = cmd.Replace("/S", "").Trim();
+                        cmd += " -silent";
+                    }
+                    break;
+
+                default:
+                    if (!cmd.Contains("/S") && !cmd.Contains("/quiet") && !cmd.Contains("--silent"))
+                        cmd += " /S";
+                    break;
+            }
+
+            AppendLog($"[*] Итоговая команда: {cmd}", Color.Cyan);
+            return cmd;
+        }
+
+        // ---------- Прямой запуск (фоновый) ----------
+        private void RunUninstallDirect(string productName, string customCommand, int maxWait, int checkInterval)
+        {
+            isRunning = true;
+            btnUninstall.Enabled = false;
+
+            try
+            {
+                AppendLog("[*] Начало операции (прямой запуск).", Color.Cyan);
+
+                string innerCmd = BuildCommand(productName, customCommand);
+                if (string.IsNullOrEmpty(innerCmd))
+                    return;
+
+                ProcessStartInfo psi = new ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = $"/c {innerCmd}",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                };
+
+                AppendLog($"[*] Запускаем: {psi.FileName} {psi.Arguments}", Color.Yellow);
+                Process process = Process.Start(psi);
+
+                if (process == null || process.HasExited)
+                {
+                    AppendLog("[ERROR] Не удалось запустить процесс.", Color.Red);
+                    return;
+                }
+
+                AppendLog($"[*] Процесс запущен (PID: {process.Id}).", Color.Green);
+
+                WaitForUninstall(productName, customCommand, maxWait, checkInterval);
+
+                if (!process.HasExited)
+                {
+                    process.WaitForExit(5000);
+                    if (!process.HasExited)
+                        process.Kill();
+                }
+
+                AppendLog("[+] Операция завершена.", Color.Green);
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"[ERROR] Исключение: {ex.Message}", Color.Red);
+                AppendLog(ex.StackTrace, Color.Red);
+            }
+            finally
+            {
+                isRunning = false;
+                btnUninstall.Invoke((Action)(() => btnUninstall.Enabled = true));
+                lblStatus.Invoke((Action)(() => lblStatus.Text = "Готов к работе"));
+            }
+        }
+
+        // ---------- Бэкап оригинального ImagePath ----------
+        private void SaveOriginalServicePath(string serviceName, string originalPath)
+        {
+            string keyPath = @"SOFTWARE\InfoWatchUninstaller\ServiceBackup";
+            using (RegistryKey key = Registry.LocalMachine.CreateSubKey(keyPath))
+            {
+                key.SetValue(serviceName, originalPath);
+            }
+        }
+
+        private string GetSavedOriginalServicePath(string serviceName)
+        {
+            string keyPath = @"SOFTWARE\InfoWatchUninstaller\ServiceBackup";
+            using (RegistryKey key = Registry.LocalMachine.OpenSubKey(keyPath))
+            {
+                if (key == null) return null;
+                return key.GetValue(serviceName) as string;
+            }
+        }
+
+        // ---------- Метод через подмену службы (исправлен) ----------
         private void RunUninstallViaService(string productName, string serviceName, string customCommand, int maxWait, int checkInterval)
         {
             isRunning = true;
             btnUninstall.Enabled = false;
-            string originalPath = null;
             bool serviceStopped = false;
 
             try
             {
                 AppendLog("[*] Начало операции (через службу).", Color.Cyan);
 
-                // 1. Получаем оригинальный ImagePath
-                originalPath = GetServiceImagePath(serviceName);
-                if (string.IsNullOrEmpty(originalPath))
+                // 1. Получаем текущий путь к службе
+                string currentPath = GetServiceImagePath(serviceName);
+                if (string.IsNullOrEmpty(currentPath))
                 {
-                    AppendLog($"[ERROR] Служба '{serviceName}' не найдена или доступ запрещён.", Color.Red);
+                    AppendLog($"[ERROR] Служба '{serviceName}' не найдена.", Color.Red);
                     return;
                 }
+
+                // 2. Проверяем, не изменена ли уже служба (содержит cmd.exe /c)
+                if (currentPath.IndexOf("cmd.exe /c", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    AppendLog("[WARN] Служба уже изменена. Попытка восстановить из бэкапа.", Color.Yellow);
+                    string backup = GetSavedOriginalServicePath(serviceName);
+                    if (!string.IsNullOrEmpty(backup))
+                    {
+                        SetServiceImagePath(serviceName, backup);
+                        AppendLog($"[*] Восстановлен оригинальный ImagePath из бэкапа: {backup}", Color.Cyan);
+                        currentPath = backup;
+                    }
+                    else
+                    {
+                        AppendLog("[ERROR] Бэкап не найден. Невозможно восстановить оригинальный путь. Используйте прямой запуск.", Color.Red);
+                        return;
+                    }
+                }
+
+                // 3. Сохраняем оригинальный путь (если ещё не сохранён)
+                string savedPath = GetSavedOriginalServicePath(serviceName);
+                if (string.IsNullOrEmpty(savedPath))
+                {
+                    SaveOriginalServicePath(serviceName, currentPath);
+                    savedPath = currentPath;
+                }
+                string originalPath = savedPath; // Это настоящий оригинал
+
                 AppendLog($"[*] Оригинальный ImagePath: {originalPath}", Color.Cyan);
 
-                // 2. Формируем команду
+                // 4. Формируем команду
                 string innerCmd = BuildCommand(productName, customCommand);
                 if (string.IsNullOrEmpty(innerCmd))
                     return;
 
-                // 3. Формируем команду для службы с start /b
+                // 5. Устанавливаем новый ImagePath
                 string newImagePath = $"cmd.exe /c start /b {innerCmd}";
                 AppendLog($"[*] Устанавливаем ImagePath = {newImagePath}", Color.Yellow);
                 SetServiceImagePath(serviceName, newImagePath);
 
-                // 4. Останавливаем службу
+                // 6. Останавливаем службу
                 AppendLog($"[*] Останавливаем службу '{serviceName}'...", Color.Yellow);
                 StopService(serviceName);
                 serviceStopped = true;
                 Thread.Sleep(3000);
 
-                // 5. Запускаем службу
+                // 7. Запускаем службу (с проверкой, но без выброса исключения)
                 AppendLog($"[*] Запускаем службу '{serviceName}' — выполнение команды начато.", Color.Green);
                 bool serviceStarted = StartServiceWithCheck(serviceName);
                 if (!serviceStarted)
                     AppendLog($"[WARN] Служба не запустилась (ошибка 1053?), но команда могла быть отправлена.", Color.Yellow);
 
-                // 6. Проверяем, появился ли процесс
+                // 8. Проверяем процесс
                 CheckProcess(innerCmd);
 
-                // 7. Ожидание завершения
+                // 9. Ожидаем завершения
                 WaitForUninstall(productName, customCommand, maxWait, checkInterval);
 
-                // 8. Восстанавливаем оригинальный ImagePath
-                AppendLog($"[*] Восстанавливаем оригинальный ImagePath...", Color.Yellow);
-                SetServiceImagePath(serviceName, originalPath);
+                // 10. Восстанавливаем оригинальный ImagePath (ИМЕННО СОХРАНЁННЫЙ)
+                string restorePath = GetSavedOriginalServicePath(serviceName);
+                if (string.IsNullOrEmpty(restorePath))
+                    restorePath = originalPath; // fallback
 
-                // 9. Перезапускаем службу
+                AppendLog($"[*] Восстанавливаем оригинальный ImagePath: {restorePath}", Color.Yellow);
+                SetServiceImagePath(serviceName, restorePath);
+
+                // 11. Перезапускаем службу
                 AppendLog($"[*] Перезапускаем службу '{serviceName}'...", Color.Yellow);
                 StopService(serviceName);
                 Thread.Sleep(2000);
@@ -331,16 +700,17 @@ namespace InfoWatchUninstaller
             }
             finally
             {
-                // Гарантированное восстановление
-                if (!string.IsNullOrEmpty(originalPath))
+                // Гарантированное восстановление из бэкапа при ошибке
+                try
                 {
-                    try
+                    string restorePath = GetSavedOriginalServicePath(serviceName);
+                    if (!string.IsNullOrEmpty(restorePath))
                     {
-                        string currentPath = GetServiceImagePath(serviceName);
-                        if (currentPath != originalPath)
+                        string current = GetServiceImagePath(serviceName);
+                        if (current != restorePath)
                         {
-                            AppendLog($"[*] Принудительное восстановление оригинального ImagePath в finally.", Color.Yellow);
-                            SetServiceImagePath(serviceName, originalPath);
+                            AppendLog($"[*] Принудительное восстановление из бэкапа в finally.", Color.Yellow);
+                            SetServiceImagePath(serviceName, restorePath);
                             if (serviceStopped)
                             {
                                 StopService(serviceName);
@@ -349,181 +719,16 @@ namespace InfoWatchUninstaller
                             }
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        AppendLog($"[ERROR] Не удалось восстановить службу в finally: {ex.Message}", Color.Red);
-                    }
                 }
+                catch { }
+
                 isRunning = false;
                 btnUninstall.Invoke((Action)(() => btnUninstall.Enabled = true));
                 lblStatus.Invoke((Action)(() => lblStatus.Text = "Готов к работе"));
             }
         }
 
-        // ---------- УНИВЕРСАЛЬНАЯ ФОРМИРОВКА КОМАНДЫ (с поддержкой Cisco и предпочтением MSI) ----------
-        private string BuildCommand(string productName, string customCommand)
-        {
-            if (!string.IsNullOrEmpty(customCommand))
-            {
-                AppendLog($"[*] Пользовательская команда: {customCommand}", Color.Cyan);
-                return customCommand;
-            }
-
-            var productInfo = FindProductInfo(productName);
-            if (productInfo == null)
-            {
-                AppendLog($"[WARN] Продукт '{productName}' не найден в реестре.", Color.Yellow);
-                return null;
-            }
-            AppendLog($"[*] Найден ключ: {productInfo.KeyName}", Color.Green);
-            AppendLog($"[*] UninstallString: {productInfo.UninstallString}", Color.Cyan);
-
-            if (string.IsNullOrEmpty(productInfo.UninstallString))
-            {
-                AppendLog("[ERROR] UninstallString пустая.", Color.Red);
-                return null;
-            }
-
-            string cmd = productInfo.UninstallString;
-
-            // Определяем, является ли это msiexec
-            bool isMsi = cmd.IndexOf("msiexec", StringComparison.OrdinalIgnoreCase) >= 0;
-
-            if (isMsi)
-            {
-                // Если используется /I, заменяем на /X (удаление)
-                if (cmd.IndexOf(" /I", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    cmd = cmd.Replace("/I", "/X");
-                    AppendLog("[*] Заменён параметр /I на /X для деинсталляции.", Color.Cyan);
-                }
-
-                // Добавляем /quiet /norestart, если их нет
-                if (cmd.IndexOf("/quiet", StringComparison.OrdinalIgnoreCase) < 0 &&
-                    cmd.IndexOf("/qb", StringComparison.OrdinalIgnoreCase) < 0)
-                {
-                    cmd += " /quiet /norestart";
-                }
-                else if (cmd.IndexOf("/norestart", StringComparison.OrdinalIgnoreCase) < 0)
-                {
-                    cmd += " /norestart";
-                }
-            }
-            else
-            {
-                // Кастомный деинсталлятор (не msiexec)
-                // Специальные случаи для известных продуктов
-                if (cmd.IndexOf("Cisco", StringComparison.OrdinalIgnoreCase) >= 0 &&
-                    cmd.IndexOf("Uninstall.exe", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    // Cisco AnyConnect использует -silent
-                    if (cmd.IndexOf("-silent", StringComparison.OrdinalIgnoreCase) < 0)
-                    {
-                        // Если уже есть /S, убираем его
-                        if (cmd.IndexOf("/S", StringComparison.OrdinalIgnoreCase) >= 0)
-                            cmd = cmd.Replace("/S", "").Trim();
-                        cmd += " -silent";
-                        AppendLog("[*] Добавлен флаг -silent для Cisco AnyConnect.", Color.Cyan);
-                    }
-                }
-                else
-                {
-                    // Общий случай: проверяем наличие распространённых тихих флагов
-                    string[] silentFlags = { "/S", "/silent", "/quiet", "--quiet", "--silent", "-silent", "-quiet", "--mode=silent", "--mode=2" };
-                    bool hasSilentFlag = false;
-                    foreach (string flag in silentFlags)
-                    {
-                        if (cmd.IndexOf(flag, StringComparison.OrdinalIgnoreCase) >= 0)
-                        {
-                            hasSilentFlag = true;
-                            break;
-                        }
-                    }
-                    if (!hasSilentFlag)
-                    {
-                        cmd += " /S";
-                        AppendLog("[*] Добавлен флаг /S для тихого удаления кастомного деинсталлятора.", Color.Cyan);
-                    }
-                }
-            }
-
-            return cmd;
-        }
-
-        // ---------- ПРОВЕРКА ПРОЦЕССА (исправленная) ----------
-        private void CheckProcess(string commandLine)
-        {
-            string processName = null;
-
-            // Извлекаем имя исполняемого файла, учитывая кавычки
-            string exePath = commandLine.Trim();
-            if (exePath.StartsWith("\""))
-            {
-                int endQuote = exePath.IndexOf("\"", 1);
-                if (endQuote > 0)
-                    exePath = exePath.Substring(1, endQuote - 1);
-            }
-            else
-            {
-                exePath = exePath.Split(' ')[0];
-            }
-
-            if (!string.IsNullOrEmpty(exePath))
-            {
-                processName = System.IO.Path.GetFileNameWithoutExtension(exePath);
-            }
-
-            if (string.IsNullOrEmpty(processName))
-                return;
-
-            bool found = false;
-            for (int i = 0; i < 10; i++)
-            {
-                if (Process.GetProcessesByName(processName).Length > 0)
-                {
-                    found = true;
-                    break;
-                }
-                Thread.Sleep(500);
-            }
-            if (found)
-                AppendLog($"[*] Процесс {processName} запущен.", Color.Green);
-            else
-                AppendLog($"[WARN] Процесс {processName} не обнаружен. Возможно, команда не выполнилась.", Color.Yellow);
-        }
-
-        // ---------- ОЖИДАНИЕ ЗАВЕРШЕНИЯ ----------
-        private void WaitForUninstall(string productName, string customCommand, int maxWait, int checkInterval)
-        {
-            int elapsed = 0;
-            if (string.IsNullOrEmpty(customCommand))
-            {
-                AppendLog($"[⏳] Ожидание завершения деинсталляции (макс. {maxWait} сек)...", Color.Yellow);
-                bool uninstalled = false;
-                while (elapsed < maxWait)
-                {
-                    Thread.Sleep(checkInterval * 1000);
-                    elapsed += checkInterval;
-                    if (!IsProductInstalled(productName))
-                    {
-                        AppendLog($"[✅] Продукт '{productName}' успешно удалён!", Color.Green);
-                        uninstalled = true;
-                        break;
-                    }
-                    AppendLog($"    [{elapsed}/{maxWait}] Продукт ещё присутствует...", Color.Gray);
-                }
-                if (!uninstalled)
-                    AppendLog($"[WARN] Достигнут таймаут. Деинсталляция могла не завершиться.", Color.Yellow);
-            }
-            else
-            {
-                AppendLog($"[*] Пользовательская команда запущена. Ожидание {maxWait} секунд...", Color.Yellow);
-                Thread.Sleep(maxWait * 1000);
-                AppendLog($"[*] Ожидание завершено.", Color.Gray);
-            }
-        }
-
-        // ---------- РАБОТА СО СЛУЖБОЙ ----------
+        // ---------- Работа со службой ----------
         private string GetServiceImagePath(string serviceName)
         {
             string keyPath = $@"SYSTEM\CurrentControlSet\Services\{serviceName}";
@@ -589,7 +794,76 @@ namespace InfoWatchUninstaller
             }
         }
 
-        // ---------- ЛОГИРОВАНИЕ ----------
+        // ---------- Проверка процесса ----------
+        private void CheckProcess(string commandLine)
+        {
+            string processName = null;
+            string exePath = commandLine.Trim();
+            if (exePath.StartsWith("\""))
+            {
+                int endQuote = exePath.IndexOf("\"", 1);
+                if (endQuote > 0)
+                    exePath = exePath.Substring(1, endQuote - 1);
+            }
+            else
+            {
+                exePath = exePath.Split(' ')[0];
+            }
+
+            if (!string.IsNullOrEmpty(exePath))
+                processName = Path.GetFileNameWithoutExtension(exePath);
+
+            if (string.IsNullOrEmpty(processName))
+                return;
+
+            bool found = false;
+            for (int i = 0; i < 10; i++)
+            {
+                if (Process.GetProcessesByName(processName).Length > 0)
+                {
+                    found = true;
+                    break;
+                }
+                Thread.Sleep(500);
+            }
+            if (found)
+                AppendLog($"[*] Процесс {processName} запущен.", Color.Green);
+            else
+                AppendLog($"[WARN] Процесс {processName} не обнаружен. Возможно, команда не выполнилась.", Color.Yellow);
+        }
+
+        // ---------- Ожидание завершения ----------
+        private void WaitForUninstall(string productName, string customCommand, int maxWait, int checkInterval)
+        {
+            int elapsed = 0;
+            if (string.IsNullOrEmpty(customCommand))
+            {
+                AppendLog($"[⏳] Ожидание завершения деинсталляции (макс. {maxWait} сек)...", Color.Yellow);
+                bool uninstalled = false;
+                while (elapsed < maxWait)
+                {
+                    Thread.Sleep(checkInterval * 1000);
+                    elapsed += checkInterval;
+                    if (!IsProductInstalled(productName))
+                    {
+                        AppendLog($"[✅] Продукт '{productName}' успешно удалён!", Color.Green);
+                        uninstalled = true;
+                        break;
+                    }
+                    AppendLog($"    [{elapsed}/{maxWait}] Продукт ещё присутствует...", Color.Gray);
+                }
+                if (!uninstalled)
+                    AppendLog($"[WARN] Достигнут таймаут. Деинсталляция могла не завершиться.", Color.Yellow);
+            }
+            else
+            {
+                AppendLog($"[*] Пользовательская команда запущена. Ожидание {maxWait} секунд...", Color.Yellow);
+                Thread.Sleep(maxWait * 1000);
+                AppendLog($"[*] Ожидание завершено.", Color.Gray);
+            }
+        }
+
+        // ---------- Логирование ----------
         private void AppendLog(string message, Color color)
         {
             if (rtbLog.InvokeRequired)
