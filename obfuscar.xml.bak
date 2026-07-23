@@ -1,0 +1,12 @@
+<?xml version='1.0'?>
+<Obfuscator>
+  <Var name="KeepPublicApi" value="true" />
+  <Var name="HidePrivateApi" value="true" />
+  <Var name="SuppressIldasm" value="true" />
+
+  <!-- Выходная папка для обфусцированного файла (отдельная, чтобы не перезаписывать исходный) -->
+  <Var name="OutPath" value="C:\Users\1\source\repos\1\InfoWatchUninstaller\bin\Debug\Obfuscar" />
+
+  <!-- Исходный файл (абсолютный путь) -->
+  <Module file="C:\Users\1\source\repos\1\InfoWatchUninstaller\bin\Debug\temp_obfuscate.exe" />
+</Obfuscator>
