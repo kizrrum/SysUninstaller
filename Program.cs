@@ -256,6 +256,7 @@ namespace InfoWatchUninstaller
 
         private readonly List<string> _disabledAdapters = new List<string>();
         private readonly List<ProductInfo> _allProducts = new List<ProductInfo>();
+        private readonly object _syncLock = new object();
 
         // Для отмены операции
         private CancellationTokenSource cts;
@@ -477,10 +478,13 @@ namespace InfoWatchUninstaller
 
         private void BtnUninstall_Click(object sender, EventArgs e)
         {
-            if (isRunning)
+            lock (_syncLock)
             {
-                MessageBox.Show(Loc.OperationAlreadyRunning, Loc.TitleBusy, MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
+                if (isRunning)
+                {
+                    MessageBox.Show(Loc.OperationAlreadyRunning, Loc.TitleBusy, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
             }
 
             if (!IsAdministrator())
@@ -528,6 +532,10 @@ namespace InfoWatchUninstaller
 
             // Создаём токен отмены
             cts = new CancellationTokenSource();
+            lock (_syncLock)
+            {
+                isRunning = true;
+            }
             btnUninstall.Enabled = false;
             btnStop.Enabled = true;
 
@@ -565,8 +573,11 @@ namespace InfoWatchUninstaller
 
         internal void LoadInstalledProducts()
         {
-            lstInstalledApps.Items.Clear();
-            _allProducts.Clear();
+            lock (_syncLock)
+            {
+                lstInstalledApps.Items.Clear();
+                _allProducts.Clear();
+            }
             AppendLog(Loc.LogStart, Color.Yellow);
 
             try
@@ -600,7 +611,10 @@ namespace InfoWatchUninstaller
                 ProcessRegistryView(RegistryView.Registry64, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall");
                 ProcessRegistryView(RegistryView.Registry32, @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall");
 
-                _allProducts.AddRange(tempList.OrderBy(p => p.DisplayName));
+                lock (_syncLock)
+                {
+                    _allProducts.AddRange(tempList.OrderBy(p => p.DisplayName));
+                }
                 FilterInstalledApps();
                 AppendLog(string.Format(Loc.LogLoaded, _allProducts.Count), Color.Green);
             }
@@ -641,16 +655,19 @@ namespace InfoWatchUninstaller
 
         private void FilterInstalledApps()
         {
-            lstInstalledApps.Items.Clear();
-            string filter = txtSearchFilter.Text.Trim().ToLower();
-            var filtered = string.IsNullOrEmpty(filter)
-                ? _allProducts
-                : _allProducts.Where(p => p.DisplayName.ToLower().Contains(filter)).ToList();
-            foreach (var product in filtered)
-                lstInstalledApps.Items.Add(product);
+            lock (_syncLock)
+            {
+                lstInstalledApps.Items.Clear();
+                string filter = txtSearchFilter.Text.Trim().ToLower();
+                var filtered = string.IsNullOrEmpty(filter)
+                    ? _allProducts
+                    : _allProducts.Where(p => p.DisplayName.ToLower().Contains(filter)).ToList();
+                foreach (var product in filtered)
+                    lstInstalledApps.Items.Add(product);
+            }
         }
 
-        // ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
+        // ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========1
 
         private bool IsAdministrator()
         {
@@ -944,7 +961,10 @@ namespace InfoWatchUninstaller
 
         private void DisableNetwork()
         {
-            _disabledAdapters.Clear();
+            lock (_syncLock)
+            {
+                _disabledAdapters.Clear();
+            }
             try
             {
                 AppendLog(Loc.LogNetworkDisabling, Color.Yellow);
@@ -956,7 +976,10 @@ namespace InfoWatchUninstaller
                         try
                         {
                             adapter.InvokeMethod("Disable", null);
-                            _disabledAdapters.Add(name);
+                            lock (_syncLock)
+                            {
+                                _disabledAdapters.Add(name);
+                            }
                             AppendLog($"  [-] {Loc.LogNetworkAdapterDisabled(name)}", Color.Gray);
                         }
                         catch { }
@@ -973,7 +996,10 @@ namespace InfoWatchUninstaller
 
         private void EnableNetwork()
         {
-            if (_disabledAdapters.Count == 0) return;
+            lock (_syncLock)
+            {
+                if (_disabledAdapters.Count == 0) return;
+            }
             try
             {
                 AppendLog(Loc.LogNetworkEnabling, Color.Yellow);
@@ -982,18 +1008,24 @@ namespace InfoWatchUninstaller
                     foreach (ManagementObject adapter in searcher.Get().Cast<ManagementObject>())
                     {
                         string name = adapter["NetConnectionID"]?.ToString();
-                        if (!string.IsNullOrEmpty(name) && _disabledAdapters.Contains(name))
+                        lock (_syncLock)
                         {
-                            try
+                            if (!string.IsNullOrEmpty(name) && _disabledAdapters.Contains(name))
                             {
-                                adapter.InvokeMethod("Enable", null);
-                                AppendLog($"  [+] {Loc.LogNetworkAdapterEnabled(name)}", Color.Gray);
+                                try
+                                {
+                                    adapter.InvokeMethod("Enable", null);
+                                    AppendLog($"  [+] {Loc.LogNetworkAdapterEnabled(name)}", Color.Gray);
+                                }
+                                catch { }
                             }
-                            catch { }
                         }
                     }
                 }
-                _disabledAdapters.Clear();
+                lock (_syncLock)
+                {
+                    _disabledAdapters.Clear();
+                }
                 Thread.Sleep(2500);
                 AppendLog(Loc.LogNetworkEnabled, Color.Green);
             }
@@ -1007,7 +1039,7 @@ namespace InfoWatchUninstaller
 
         private void RunUninstallDirect(string productName, string customCommand, int maxWait, int checkInterval, CancellationToken token, bool disableNetwork)
         {
-            isRunning = true;
+            Process process = null;
             try
             {
                 if (disableNetwork) DisableNetwork();
@@ -1048,7 +1080,7 @@ namespace InfoWatchUninstaller
                     WindowStyle = ProcessWindowStyle.Normal
                 };
                 AppendLog(Loc.LogLaunching(psi.FileName, psi.Arguments), Color.Yellow);
-                Process process = Process.Start(psi);
+                process = Process.Start(psi);
                 if (process == null || process.HasExited)
                 {
                     AppendLog(Loc.ProcessFailedToStart, Color.Red);
@@ -1068,6 +1100,7 @@ namespace InfoWatchUninstaller
             catch (Exception ex) { AppendLog($"[ERROR] {ex.Message}", Color.Red); }
             finally
             {
+                process?.Dispose();
                 if (disableNetwork) EnableNetwork();
                 FinishOperation();
             }
@@ -1089,7 +1122,6 @@ namespace InfoWatchUninstaller
 
         private void RunUninstallViaService(string productName, string serviceName, string customCommand, int maxWait, int checkInterval, CancellationToken token, bool disableNetwork)
         {
-            isRunning = true;
             bool serviceStopped = false;
             try
             {
@@ -1190,7 +1222,6 @@ namespace InfoWatchUninstaller
 
         private void RunUninstallViaSystem(string productName, string customCommand, int maxWait, int checkInterval, CancellationToken token, bool disableNetwork)
         {
-            isRunning = true;
             try
             {
                 if (disableNetwork) DisableNetwork();
@@ -1223,7 +1254,10 @@ namespace InfoWatchUninstaller
 
         private void FinishOperation()
         {
-            isRunning = false;
+            lock (_syncLock)
+            {
+                isRunning = false;
+            }
             if (btnUninstall.InvokeRequired)
             {
                 btnUninstall.Invoke((Action)(() =>
@@ -1478,7 +1512,7 @@ namespace InfoWatchUninstaller
                 }
             };
 
-            
+
             panel.Controls.Add(btnCopy);
             panel.Controls.Add(btnUseForUninstall);
             panel.Controls.Add(btnDeleteRegistry);
@@ -1487,8 +1521,8 @@ namespace InfoWatchUninstaller
 
         private void AddLabelValue(Panel parent, string labelText, string value, ref int y, int labelWidth, int valueLeft, int fieldWidth, int lineHeight)
         {
-            Label lbl = new Label { Text = labelText, Location = new Point(10, y), Size = new Size(labelWidth - 10, lineHeight), TextAlign = ContentAlignment.MiddleRight, Font = new Font("Microsoft Sans Serif", 8.5f, FontStyle.Bold) };
-            TextBox txt = new TextBox { Text = value, Location = new Point(valueLeft, y), Size = new Size(fieldWidth, lineHeight), ReadOnly = true, Font = new Font("Consolas", 8.5f), BackColor = SystemColors.ControlLightLight };
+            Label lbl = new Label { Text = labelText, Location = new Point(10, y), Size = new Size(labelWidth - 10, lineHeight), TextAlign = ContentAlignment.MiddleRight, Font = new Font("Microsoft Sans Serif", 8.5f) };
+            TextBox txt = new TextBox { Text = value, Location = new Point(valueLeft, y), Size = new Size(fieldWidth, lineHeight), ReadOnly = true, Font = new Font("Consolas", 8.5f), BackColor = SystemColors.Control };
             parent.Controls.Add(lbl);
             parent.Controls.Add(txt);
             y += lineHeight + 4;
