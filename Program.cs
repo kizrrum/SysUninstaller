@@ -252,7 +252,7 @@ namespace InfoWatchUninstaller
 
         // Методы удаления
         private enum UninstallMethod { Service, Direct, SystemImpersonation }
-        private UninstallMethod selectedMethod = UninstallMethod.Service;
+        private UninstallMethod selectedMethod = UninstallMethod.Direct;
 
         private readonly List<string> _disabledAdapters = new List<string>();
         private readonly List<ProductInfo> _allProducts = new List<ProductInfo>();
@@ -320,6 +320,34 @@ namespace InfoWatchUninstaller
             btnBrowseCommand = new Button { Text = "Обзор…", Location = new Point(580, 95), Width = 80, Height = 25 };
             btnBrowseCommand.Click += BtnBrowseCommand_Click;
 
+            // Кнопка помощи
+            Button btnHelp = new Button
+            {
+                Text = "?",
+                Location = new Point(665, 95),
+                Width = 25,
+                Height = 25,
+                Font = new Font("Microsoft Sans Serif", 9, FontStyle.Bold)
+            };
+            btnHelp.Click += (s, e) =>
+            {
+                MessageBox.Show(
+                    "SysUninstaller – утилита для принудительного удаления программ\n\n" +
+                    "📋 Требования:\n" +
+                    "• Права администратора (запрашиваются при запуске)\n" +
+                    "• .NET Framework 4.5.2 или выше\n" +
+                    "• Windows 7 / 8 / 10 / 11\n\n" +
+                    "🛠 Основные возможности:\n" +
+                    "• Удаление программ через службу / прямой запуск / от SYSTEM\n" +
+                    "• Очистка «висящих» записей реестра\n" +
+                    "• Временное отключение сети для предотвращения обратной связи\n\n" +
+                    "📖 Подробная инструкция: https://github.com/kizrrum/SysUninstaller#readme",
+                    "О программе",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            };
+            Controls.Add(btnHelp);
+
             nudMaxWait = new NumericUpDown { Location = new Point(220, 137), Width = 80, Minimum = 10, Maximum = 600, Value = 90 };
             nudCheckInterval = new NumericUpDown { Location = new Point(220, 177), Width = 80, Minimum = 1, Maximum = 30, Value = 5 };
 
@@ -343,7 +371,7 @@ namespace InfoWatchUninstaller
                 Text = "Отключить сеть на время удаления",
                 Location = new Point(220, 265),
                 AutoSize = true,
-                Checked = true
+                Checked = false
             };
 
             // Группа выбора метода
@@ -354,8 +382,8 @@ namespace InfoWatchUninstaller
                 Size = new Size(200, 100)
             };
 
-            RadioButton rbService = new RadioButton { Text = "Через службу", Location = new Point(10, 20), Size = new Size(180, 20), Checked = true };
-            RadioButton rbDirect = new RadioButton { Text = "Прямой запуск", Location = new Point(10, 45), Size = new Size(180, 20) };
+            RadioButton rbService = new RadioButton { Text = "Через службу", Location = new Point(10, 20), Size = new Size(180, 20) };
+            RadioButton rbDirect = new RadioButton { Text = "Прямой запуск", Location = new Point(10, 45), Size = new Size(180, 20), Checked = true };
             RadioButton rbSystem = new RadioButton { Text = "Через SYSTEM", Location = new Point(10, 70), Size = new Size(180, 20) };
 
             toolTip.SetToolTip(rbService,
@@ -1540,10 +1568,50 @@ namespace InfoWatchUninstaller
 
             if (!IsAdministrator())
             {
-                RestartAsAdmin();
-                return;
+                DialogResult result = MessageBox.Show(
+                    "Программа требует права администратора для:\n" +
+                    "• управления службами Windows\n" +
+                    "• доступа к реестру (удаление/изменение)\n" +
+                    "• отключения сетевых адаптеров\n\n" +
+                    "Нажмите «Да», чтобы перезапустить программу с повышенными правами.\n" +
+                    "Если у вас нет прав администратора, обратитесь к системному администратору.",
+                    "Требуются права администратора",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Information);
+
+                if (result == DialogResult.Yes)
+                {
+                    try
+                    {
+                        ProcessStartInfo psi = new ProcessStartInfo
+                        {
+                            FileName = Application.ExecutablePath,
+                            Verb = "runas",
+                            UseShellExecute = true
+                        };
+                        Process.Start(psi);
+                        Application.Exit();
+                    }
+                    catch
+                    {
+                        MessageBox.Show(
+                            "Не удалось получить права администратора.\n" +
+                            "Убедитесь, что ваша учётная запись имеет права администратора, или запустите программу вручную от имени администратора.",
+                            "Ошибка",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Error);
+                        Application.Exit();
+                    }
+                }
+                else
+                {
+                    Application.Exit();
+                }
             }
-            Application.Run(new MainForm());
+            else
+            {
+                Application.Run(new MainForm());
+            }
         }
 
         private static bool IsAdministrator()
@@ -1551,25 +1619,6 @@ namespace InfoWatchUninstaller
             WindowsIdentity identity = WindowsIdentity.GetCurrent();
             WindowsPrincipal principal = new WindowsPrincipal(identity);
             return principal.IsInRole(WindowsBuiltInRole.Administrator);
-        }
-
-        private static void RestartAsAdmin()
-        {
-            ProcessStartInfo psi = new ProcessStartInfo
-            {
-                FileName = Application.ExecutablePath,
-                Verb = "runas",
-                UseShellExecute = true
-            };
-            try
-            {
-                Process.Start(psi);
-                Application.Exit();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Не удалось запустить с правами администратора: {ex.Message}", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
         }
     }
 }
