@@ -1070,6 +1070,30 @@ namespace InfoWatchUninstaller
                 string innerCmd = BuildCommand(productName, customCommand, false);
                 if (string.IsNullOrEmpty(innerCmd)) return;
 
+                // Извлекаем путь к исполняемому файлу для проверки существования
+                string exePath = ExtractExePath(innerCmd);
+                if (!string.IsNullOrEmpty(exePath) && !File.Exists(exePath))
+                {
+                    AppendLog($"[WARN] Файл деинсталлятора не найден: {exePath}", Color.Yellow);
+                    DialogResult removeReg = MessageBox.Show(
+                        $"Файл деинсталлятора не существует:\n{exePath}\n\nПрограмма, возможно, уже удалена. Удалить запись из реестра?",
+                        "Файл не найден",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Warning);
+                    if (removeReg == DialogResult.Yes)
+                    {
+                        ProductInfo prod = FindProductInfo(productName);
+                        if (prod != null && RemoveRegistryEntry(prod.KeyName))
+                        {
+                            AppendLog("[*] Запись реестра успешно удалена.", Color.Green);
+                            this.Invoke((Action)(() => LoadInstalledProducts()));
+                        }
+                        else
+                            AppendLog("[ERROR] Не удалось удалить запись реестра.", Color.Red);
+                    }
+                    return; // Выходим, не запуская процесс
+                }
+
                 ProcessStartInfo psi = new ProcessStartInfo
                 {
                     FileName = "cmd.exe",
