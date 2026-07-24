@@ -40,7 +40,5 @@ Three uninstall methods, smart update checking, registry cleanup, and full contr
 
 ## Build from Source
 
-## Сборка из исходников
-
 ```bash
 git clone https://github.com/kizrrum/SysUninstaller.git
