@@ -42,6 +42,10 @@ Three uninstall methods, smart update checking, registry cleanup, and full contr
 
 ```bash
 git clone https://github.com/kizrrum/SysUninstaller.git
-## Disclaimer
+Open SysUninstaller.sln in Visual Studio, build in Release configuration.
+The executable will be located in bin\Release\.
 
-**⚠️ Use at your own risk.** The author is not responsible for any damage caused by the use of this software. You are solely responsible for compliance with all applicable laws and regulations.
+Disclaimer
+⚠️ Use at your own risk. The author is not responsible for any damage caused by the use of this software. You are solely responsible for compliance with all applicable laws and regulations.
+
+text
