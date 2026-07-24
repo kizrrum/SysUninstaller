@@ -47,7 +47,7 @@
 8. Если после удаления запись осталась в списке, дважды кликните по ней и нажмите **«Удалить запись в реестре»**.
 
 ## Скриншоты
-![Главное окно программы](https://raw.githubusercontent.com/kizrrum/SysUninstaller/master/screenshots/main_window.png)
+![Главное окно программы](https://raw.githubusercontent.com/kizrrum/SysUninstaller/master/main_window.png)
 
 *Пример главного окна SysUninstaller с загруженным списком приложений.*
 
