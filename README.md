@@ -48,7 +48,7 @@
 
 ## Скриншоты
 
-![Главное окно программы](screenshots/main_window.png)
+![Главное окно программы](https://raw.githubusercontent.com/kizrrum/SysUninstaller/master/screenshots/main_window.png)
 
 *Пример главного окна SysUninstaller с загруженным списком приложений.*
 
