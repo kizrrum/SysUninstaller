@@ -240,22 +240,5 @@ namespace InfoWatchUninstaller
         public static string SizeGb(double value) => IsRussian ? $"{value:F2} ГБ" : $"{value:F2} GB";
         public static string SizeMb(double value) => IsRussian ? $"{value:F2} МБ" : $"{value:F2} MB";
         public static string SizeKb(int kb) => IsRussian ? $"{kb} КБ" : $"{kb} KB";
-		// Обновление (UpdateChecker)
-		public static string UpdateCheck => IsRussian ? "Проверка наличия новой версии..." : "Checking for new version...";
-		public static string UpdateResponse => IsRussian ? "Ответ от GitHub получен." : "GitHub response received.";
-		public static string UpdateCurrentVersion(string current, string latest) =>
-			IsRussian ? $"Текущая версия: {current}, доступная: {latest}" : $"Current version: {current}, available: {latest}";
-		public static string UpdateNoNew => IsRussian ? "Нет новой версии." : "No new version available.";
-		public static string UpdateNewFound => IsRussian ? "Обнаружена новая версия!" : "New version found!";
-		public static string UpdateDownloading => IsRussian ? "Загрузка новой версии..." : "Downloading new version...";
-		public static string UpdateDownloadComplete => IsRussian ? "Загрузка завершена. Установка обновления..." : "Download complete. Installing update...";
-		public static string UpdateFailed(string error) =>
-			IsRussian ? $"Ошибка обновления: {error}" : $"Update error: {error}";
-		public static string UpdateTagNotFound => IsRussian ? "Не удалось извлечь tag_name из ответа." : "Could not extract tag_name from response.";
-		public static string UpdateBadVersion(string ver) =>
-			IsRussian ? $"Не удалось распознать версию: '{ver}'" : $"Could not parse version: '{ver}'";
-		public static string UpdateNoCurrent => IsRussian ? "Не удалось получить текущую версию приложения." : "Could not get current application version.";
-		public static string UpdateNoDownloadUrl => IsRussian ? "Не удалось найти ссылку для загрузки." : "Could not find download URL.";
-		public static string UpdatePrefix => "[Обновление] "; // Это префикс, его не обязательно менять
     }
 }
