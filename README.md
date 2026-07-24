@@ -1,35 +1,42 @@
 # SysUninstaller
 
-**Универсальный инструмент для принудительного удаления программ в Windows.**
+**A universal tool for forced uninstallation of programs in Windows.**
 
-Три метода деинсталляции, умная проверка обновлений, чистка реестра и полный контроль над процессом.
+Three uninstall methods, smart update checking, registry cleanup, and full control over the process.
 
-## Основные возможности
+## Key Features
 
-- **Три метода удаления:**  
-  `Через службу` (подмена ImagePath), `Прямой запуск` (видимая консоль), `Через SYSTEM` (токен winlogon.exe).
-- **Автоматическое обновление** — программа сама проверяет GitHub и может загрузить и установить новую версию.
-- **Мгновенная реакция на отсутствующий деинсталлятор** — сразу предлагает удалить запись реестра, не тратя время на ошибки.
-- **Удаление «висящих» записей реестра** в один клик.
-- **Кнопка «⏹ Стоп»** для прерывания затянувшихся операций.
-- **Временное отключение сети** для блокировки обратной связи.
-- **Подробное цветное логирование** с отметками времени.
-- **Информативные тултипы** и встроенная справка (`?`).
-- **Понятный диалог для пользователей без прав администратора**.
+- **Three uninstall methods:**  
+  `Via service` (ImagePath replacement), `Direct launch` (visible console), `Via SYSTEM` (token duplication).
+- **Automatic updates** – the program checks GitHub for new releases and can download and install them automatically.
+- **Instant reaction to missing uninstaller** – if the uninstaller file is not found, it immediately offers to delete the registry entry.
+- **One-click removal of orphaned registry entries.**
+- **"⏹ Stop" button** to interrupt stuck operations.
+- **Temporary network disable** to block callback connections.
+- **Detailed colorized logging** with timestamps.
+- **Informative tooltips** on all UI elements and built-in help (`?`).
+- **Clear explanation for non-admin users** – explains why administrator rights are needed.
+- **Automatic language detection** – the interface and all messages appear in Russian or English based on the system language.
 
-## Требования
+## Requirements
 
-- Windows 7/8/10/11 (права администратора)
-- .NET Framework 4.5.2 или новее
+- Windows 7 / 8 / 10 / 11 (administrator rights)
+- .NET Framework 4.5.2 or later
 
-## Быстрый старт
+## Quick Start
 
-1. Запустите программу (UAC запросится автоматически).
-2. Выберите продукт из списка или введите название вручную.
-3. Выберите метод удаления (по умолчанию «Прямой запуск»).
-4. При необходимости настройте таймауты, отключение сети или укажите свою команду.
-5. Нажмите **«Запустить деинсталляцию»**.
-6. Если после удаления запись осталась — дважды кликните по ней и выберите **«Удалить запись в реестре»**.
+1. Launch the program (UAC will be requested automatically).
+2. Select a product from the list or enter its name manually.
+3. Choose an uninstall method (default is "Direct launch").
+4. Optionally adjust timeouts, disable network, or specify a custom command.
+5. Click **"Start uninstall"**.
+6. If a registry entry remains after uninstall – double-click it and choose **"Delete registry entry"**.
+
+## Screenshot
+
+![Main window](main_window.png)
+
+## Build from Source
 
 ## Скриншот
 
