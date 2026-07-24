@@ -263,10 +263,9 @@ namespace InfoWatchUninstaller
         public MainForm()
         {
             InitializeComponent();
-            this.Text = "Деинсталлятор (служба / прямой / SYSTEM)";
+            this.Text = Loc.Title;
             this.StartPosition = FormStartPosition.CenterScreen;
             this.Size = new Size(1050, 650);
-            // Проверка обновлений через 2 секунды после запуска, чтобы не тормозить загрузку формы
             System.Threading.Tasks.Task.Delay(2000).ContinueWith(_ => UpdateChecker.CheckForUpdates((msg, color) => AppendLog(msg, color)));
         }
 
@@ -275,55 +274,43 @@ namespace InfoWatchUninstaller
             toolTip = new ToolTip { AutoPopDelay = 10000, InitialDelay = 500, ReshowDelay = 200, ShowAlways = true };
 
             // Левая часть
-            Label lblProduct = new Label { Text = "Имя продукта (для поиска):", Location = new Point(20, 20), AutoSize = true };
-            Label lblService = new Label { Text = "Имя службы-посредника:", Location = new Point(20, 60), AutoSize = true };
-            Label lblCommand = new Label { Text = "Команда для выполнения (опцион.):", Location = new Point(20, 100), AutoSize = true };
-            Label lblMaxWait = new Label { Text = "Макс. время ожидания (сек):", Location = new Point(20, 140), AutoSize = true };
-            Label lblInterval = new Label { Text = "Интервал проверки (сек):", Location = new Point(20, 180), AutoSize = true };
+            Label lblProduct = new Label { Text = Loc.ProductLabel, Location = new Point(20, 20), AutoSize = true };
+            Label lblService = new Label { Text = Loc.ServiceLabel, Location = new Point(20, 60), AutoSize = true };
+            Label lblCommand = new Label { Text = Loc.CommandLabel, Location = new Point(20, 100), AutoSize = true };
+            Label lblMaxWait = new Label { Text = Loc.MaxWaitLabel, Location = new Point(20, 140), AutoSize = true };
+            Label lblInterval = new Label { Text = Loc.CheckIntervalLabel, Location = new Point(20, 180), AutoSize = true };
 
             txtProductName = new TextBox { Location = new Point(220, 17), Width = 250, Text = "InfoWatch" };
             txtServiceName = new TextBox { Location = new Point(220, 57), Width = 250, Text = "Spooler" };
             txtCustomCommand = new TextBox { Location = new Point(220, 97), Width = 350 };
 
             // Тултипы для полей ввода и их меток
-            toolTip.SetToolTip(lblProduct,
-                "Введите часть названия программы, которую хотите удалить.\n" +
-                "Можно также выбрать программу из списка справа — имя подставится автоматически.");
+            toolTip.SetToolTip(lblProduct, Loc.TooltipProductLabel);
+            toolTip.SetToolTip(lblService, Loc.TooltipServiceLabel);
+            toolTip.SetToolTip(lblCommand, Loc.TooltipCommandLabel);
 
-
-            toolTip.SetToolTip(lblService,
-                "Служба Windows, ImagePath которой будет временно заменён на команду удаления.\n" +
-                "Актуально только для метода «Через службу».");
-
-
-            toolTip.SetToolTip(lblCommand,
-                "Пользовательская команда, которая будет выполнена вместо автоматически сгенерированной.\n" +
-                "Оставьте поле пустым, чтобы программа сама определила команду удаления.");
-
-
-            // Тултипы для текстовых полей — через MouseHover, чтобы гарантированно показывались
             txtProductName.MouseHover += (s, ev) => {
-                toolTip.Show("Поиск продукта в реестре Uninstall по подстроке.\nНапример, «InfoWatch» найдёт «InfoWatch Device Monitor».", txtProductName);
+                toolTip.Show(Loc.TooltipProductName, txtProductName);
             };
             txtProductName.MouseLeave += (s, ev) => toolTip.Hide(txtProductName);
 
             txtServiceName.MouseHover += (s, ev) => {
-                toolTip.Show("Рекомендуется использовать некритичную службу (Spooler, wuauserv, upnphost).\nНе используйте системные службы, от которых зависит стабильность ОС.", txtServiceName);
+                toolTip.Show(Loc.TooltipServiceName, txtServiceName);
             };
             txtServiceName.MouseLeave += (s, ev) => toolTip.Hide(txtServiceName);
 
             txtCustomCommand.MouseHover += (s, ev) => {
-                toolTip.Show("Можно указать путь к EXE, BAT, CMD или любую консольную команду.\nИспользуйте кнопку «Обзор…» для выбора файла.", txtCustomCommand);
+                toolTip.Show(Loc.TooltipCustomCommand, txtCustomCommand);
             };
             txtCustomCommand.MouseLeave += (s, ev) => toolTip.Hide(txtCustomCommand);
 
-            btnBrowseCommand = new Button { Text = "Обзор…", Location = new Point(580, 95), Width = 80, Height = 25 };
+            btnBrowseCommand = new Button { Text = Loc.BrowseButton, Location = new Point(580, 95), Width = 80, Height = 25 };
             btnBrowseCommand.Click += BtnBrowseCommand_Click;
 
             // Кнопка помощи
             Button btnHelp = new Button
             {
-                Text = "?",
+                Text = Loc.HelpButton,
                 Location = new Point(665, 95),
                 Width = 25,
                 Height = 25,
@@ -331,35 +318,22 @@ namespace InfoWatchUninstaller
             };
             btnHelp.Click += (s, e) =>
             {
-                MessageBox.Show(
-                    "SysUninstaller – утилита для принудительного удаления программ\n\n" +
-                    "📋 Требования:\n" +
-                    "• Права администратора (запрашиваются при запуске)\n" +
-                    "• .NET Framework 4.5.2 или выше\n" +
-                    "• Windows 7 / 8 / 10 / 11\n\n" +
-                    "🛠 Основные возможности:\n" +
-                    "• Удаление программ через службу / прямой запуск / от SYSTEM\n" +
-                    "• Очистка «висящих» записей реестра\n" +
-                    "• Временное отключение сети для предотвращения обратной связи\n\n" +
-                    "📖 Подробная инструкция: https://github.com/kizrrum/SysUninstaller#readme",
-                    "О программе",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                MessageBox.Show(Loc.HelpText, Loc.TitleAbout, MessageBoxButtons.OK, MessageBoxIcon.Information);
             };
             Controls.Add(btnHelp);
 
             nudMaxWait = new NumericUpDown { Location = new Point(220, 137), Width = 80, Minimum = 10, Maximum = 600, Value = 90 };
             nudCheckInterval = new NumericUpDown { Location = new Point(220, 177), Width = 80, Minimum = 1, Maximum = 30, Value = 5 };
 
-            btnUninstall = new Button { Text = "Запустить деинсталляцию", Location = new Point(220, 220), Width = 180, Height = 35 };
+            btnUninstall = new Button { Text = Loc.UninstallButton, Location = new Point(220, 220), Width = 180, Height = 35 };
             btnUninstall.Click += BtnUninstall_Click;
 
             // Кнопка "Стоп"
             // Кнопка "Стоп" – теперь левее кнопки запуска
             btnStop = new Button
             {
-                Text = "⏹ Стоп",
-                Location = new Point(130, 220),  // было 410
+                Text = Loc.StopButton,
+                Location = new Point(130, 220),
                 Width = 80,
                 Height = 35,
                 Enabled = false
@@ -368,38 +342,26 @@ namespace InfoWatchUninstaller
 
             chkDisableNetwork = new CheckBox
             {
-                Text = "Отключить сеть на время удаления",
+                Text = Loc.NetworkCheckbox,
                 Location = new Point(220, 265),
                 AutoSize = true,
                 Checked = false
             };
 
-            // Группа выбора метода
             GroupBox gbMethod = new GroupBox
             {
-                Text = "Метод удаления",
+                Text = Loc.MethodGroup,
                 Location = new Point(450, 220),
                 Size = new Size(200, 100)
             };
 
-            RadioButton rbService = new RadioButton { Text = "Через службу", Location = new Point(10, 20), Size = new Size(180, 20) };
-            RadioButton rbDirect = new RadioButton { Text = "Прямой запуск", Location = new Point(10, 45), Size = new Size(180, 20), Checked = true };
-            RadioButton rbSystem = new RadioButton { Text = "Через SYSTEM", Location = new Point(10, 70), Size = new Size(180, 20) };
+            RadioButton rbService = new RadioButton { Text = Loc.ServiceRadio, Location = new Point(10, 20), Size = new Size(180, 20) };
+            RadioButton rbDirect = new RadioButton { Text = Loc.DirectRadio, Location = new Point(10, 45), Size = new Size(180, 20), Checked = true };
+            RadioButton rbSystem = new RadioButton { Text = Loc.SystemRadio, Location = new Point(10, 70), Size = new Size(180, 20) };
 
-            toolTip.SetToolTip(rbService,
-                "Выполняет удаление путём подмены исполняемого файла выбранной службы.\n" +
-                "Команда запускается от имени SYSTEM в изолированной сессии 0.\n" +
-                "Может потребоваться для обхода мониторинга агентов, но есть риск несовместимости\n" +
-                "с некоторыми установщиками (особенно MSI).");
-            toolTip.SetToolTip(rbDirect,
-                "Запускает команду удаления напрямую в фоновом процессе из текущей сессии\n" +
-                "с правами администратора. Более надёжный способ для большинства программ.\n" +
-                "Рекомендуется для MSI-пакетов и установщиков, требующих доступа к профилю пользователя.");
-            toolTip.SetToolTip(rbSystem,
-                "Копирует токен процесса winlogon.exe и запускает команду от имени SYSTEM\n" +
-                "вне службы (без подмены ImagePath). Позволяет получить права SYSTEM\n" +
-                "без ошибок, связанных со службой, но сохраняет ограничения изолированной сессии.\n" +
-                "Полезен, если нужно выполнить команду именно с максимальными привилегиями.");
+            toolTip.SetToolTip(rbService, Loc.TooltipServiceMethod);
+            toolTip.SetToolTip(rbDirect, Loc.TooltipDirectMethod);
+            toolTip.SetToolTip(rbSystem, Loc.TooltipSystemMethod);
 
             rbService.CheckedChanged += (s, e) => { if (rbService.Checked) { selectedMethod = UninstallMethod.Service; txtServiceName.Enabled = true; } };
             rbDirect.CheckedChanged += (s, e) => { if (rbDirect.Checked) { selectedMethod = UninstallMethod.Direct; txtServiceName.Enabled = false; } };
@@ -409,7 +371,7 @@ namespace InfoWatchUninstaller
             gbMethod.Controls.Add(rbDirect);
             gbMethod.Controls.Add(rbSystem);
 
-            lblStatus = new Label { Text = "Готов к работе", Location = new Point(20, 305), AutoSize = true, ForeColor = Color.DarkGreen };
+            lblStatus = new Label { Text = Loc.StatusReady, Location = new Point(20, 305), AutoSize = true, ForeColor = Color.DarkGreen };
 
             rtbLog = new RichTextBox
             {
@@ -426,14 +388,14 @@ namespace InfoWatchUninstaller
             // Правая часть (список приложений)
             Label lblInstalledApps = new Label
             {
-                Text = "Установленные приложения:",
+                Text = Loc.InstalledAppsLabel,
                 Location = new Point(700, 20),
                 AutoSize = true,
                 Font = new Font("Microsoft Sans Serif", 9, FontStyle.Bold)
             };
             txtSearchFilter = new TextBox { Location = new Point(700, 45), Width = 280 };
             txtSearchFilter.TextChanged += TxtSearchFilter_TextChanged;
-            btnRefreshList = new Button { Text = "🔄 Обновить список", Location = new Point(700, 75), Width = 130, Height = 28 };
+            btnRefreshList = new Button { Text = Loc.RefreshButton, Location = new Point(700, 75), Width = 130, Height = 28 };
             btnRefreshList.Click += BtnRefreshList_Click;
             lstInstalledApps = new ListBox
             {
@@ -447,14 +409,8 @@ namespace InfoWatchUninstaller
             lstInstalledApps.DoubleClick += LstInstalledApps_DoubleClick;
 
             // Тултип для списка приложений
-            toolTip.SetToolTip(lstInstalledApps,
-                "Выберите приложение из списка — имя будет автоматически подставлено в поле поиска.\n" +
-                "Двойной клик открывает подробную информацию о программе.");
-
-            // Тултип для заголовка "Установленные приложения:"
-            toolTip.SetToolTip(lblInstalledApps,
-                "Список всех программ, зарегистрированных в системе.\n" +
-                "Двойной клик по элементу списка показывает детали и позволяет удалить запись реестра.");
+            toolTip.SetToolTip(lstInstalledApps, Loc.TooltipInstalledAppsList);
+            toolTip.SetToolTip(lblInstalledApps, Loc.TooltipInstalledAppsLabel);
 
             // Добавление всех элементов на форму
             Controls.AddRange(new Control[] {
@@ -485,7 +441,7 @@ namespace InfoWatchUninstaller
             if (lstInstalledApps.SelectedItem is ProductInfo product)
             {
                 txtProductName.Text = product.DisplayName;
-                AppendLog($"[*] Выбран продукт: {product.DisplayName}", Color.Cyan);
+                AppendLog(Loc.LogSelectedProduct(product.DisplayName), Color.Cyan);
             }
         }
 
@@ -498,7 +454,7 @@ namespace InfoWatchUninstaller
                     if (detailsForm.ShowDialog(this) == DialogResult.OK)
                     {
                         txtProductName.Text = product.DisplayName;
-                        AppendLog($"[*] Продукт '{product.DisplayName}' выбран для удаления.", Color.Cyan);
+                        AppendLog(Loc.LogSelectedForUninstall(product.DisplayName), Color.Cyan);
                     }
                 }
             }
@@ -508,8 +464,8 @@ namespace InfoWatchUninstaller
         {
             using (OpenFileDialog openFileDialog = new OpenFileDialog())
             {
-                openFileDialog.Filter = "Исполняемые файлы (*.exe;*.bat;*.cmd)|*.exe;*.bat;*.cmd|Все файлы (*.*)|*.*";
-                openFileDialog.Title = "Выберите файл для выполнения";
+                openFileDialog.Filter = Loc.OpenFileDialogFilter;
+                openFileDialog.Title = Loc.OpenFileDialogTitle;
                 if (openFileDialog.ShowDialog() == DialogResult.OK)
                 {
                     string path = openFileDialog.FileName;
@@ -523,14 +479,14 @@ namespace InfoWatchUninstaller
         {
             if (isRunning)
             {
-                MessageBox.Show("Операция уже выполняется.", "Занято", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(Loc.OperationAlreadyRunning, Loc.TitleBusy, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
             if (!IsAdministrator())
             {
-                var result = MessageBox.Show("Требуются права администратора. Перезапустить приложение?",
-                    "Недостаточно прав", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                var result = MessageBox.Show(Loc.AdminRequired, Loc.TitleInsufficientRights,
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
                 if (result == DialogResult.Yes) RestartAsAdmin();
                 return;
             }
@@ -543,40 +499,30 @@ namespace InfoWatchUninstaller
 
             if (string.IsNullOrEmpty(productName))
             {
-                MessageBox.Show("Введите имя продукта.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(Loc.EnterProductName, Loc.TitleError, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
             if (selectedMethod == UninstallMethod.Service && string.IsNullOrEmpty(serviceName))
             {
-                MessageBox.Show("При использовании метода через службу укажите имя службы.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(Loc.ServiceNameRequired, Loc.TitleError, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
-            // Безопасно читаем состояние чекбокса в UI-потоке
             bool disableNetwork = chkDisableNetwork.Checked;
-
-            string networkWarning = disableNetwork
-                ? "Сетевые адаптеры будут временно отключены для блокировки связи."
-                : "⚠️ ВНИМАНИЕ: Сеть останется включенной! Агент может отправить алерт о попытке удаления.";
+            string networkWarning = disableNetwork ? Loc.NetworkOff : Loc.NetworkOn;
 
             string methodName;
             switch (selectedMethod)
             {
-                case UninstallMethod.Service: methodName = "через службу"; break;
-                case UninstallMethod.Direct: methodName = "прямым запуском"; break;
-                case UninstallMethod.SystemImpersonation: methodName = "от имени SYSTEM"; break;
+                case UninstallMethod.Service: methodName = Loc.MethodViaService; break;
+                case UninstallMethod.Direct: methodName = Loc.MethodDirect; break;
+                case UninstallMethod.SystemImpersonation: methodName = Loc.MethodSystem; break;
                 default: methodName = "?"; break;
             }
 
-            string warningMessage = $"Вы действительно хотите удалить продукт, содержащий \"{productName}\"?\n\n" +
-                                    $"• Метод: {methodName}.\n" +
-                                    $"• Будет выполнена попытка принудительного удаления.\n" +
-                                    $"• {networkWarning}\n" +
-                                    $"• Может потребоваться перезагрузка компьютера.\n\n" +
-                                    $"Продолжить?";
-
-            if (MessageBox.Show(warningMessage, "Подтверждение удаления",
+            string warningMessage = Loc.ConfirmUninstall(productName, methodName, networkWarning);
+            if (MessageBox.Show(warningMessage, Loc.TitleConfirmUninstall,
                 MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.No)
                 return;
 
@@ -611,7 +557,7 @@ namespace InfoWatchUninstaller
             if (isRunning && cts != null && !cts.IsCancellationRequested)
             {
                 cts.Cancel();
-                AppendLog("[*] Запрошена остановка операции. Пожалуйста, подождите...", Color.Orange);
+                AppendLog(Loc.LogOperationStopped, Color.Orange);
             }
         }
 
@@ -621,7 +567,7 @@ namespace InfoWatchUninstaller
         {
             lstInstalledApps.Items.Clear();
             _allProducts.Clear();
-            AppendLog("[*] Загрузка списка установленных приложений...", Color.Yellow);
+            AppendLog(Loc.LogStart, Color.Yellow);
 
             try
             {
@@ -656,11 +602,11 @@ namespace InfoWatchUninstaller
 
                 _allProducts.AddRange(tempList.OrderBy(p => p.DisplayName));
                 FilterInstalledApps();
-                AppendLog($"[+] Загружено {_allProducts.Count} приложений.", Color.Green);
+                AppendLog(string.Format(Loc.LogLoaded, _allProducts.Count), Color.Green);
             }
             catch (Exception ex)
             {
-                AppendLog($"[ERROR] Ошибка загрузки списка: {ex.Message}", Color.Red);
+                AppendLog($"[ERROR] {Loc.LogLoadError(ex.Message)}", Color.Red);
             }
         }
 
@@ -728,7 +674,7 @@ namespace InfoWatchUninstaller
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Не удалось запустить с правами администратора: {ex.Message}", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(Loc.RestartAsAdminFailed(ex.Message), Loc.TitleError, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
         public bool RemoveRegistryEntry(string keyName)
@@ -772,7 +718,7 @@ namespace InfoWatchUninstaller
                 }
                 catch (Exception ex)
                 {
-                    AppendLog($"[ERROR] Не удалось удалить ключ {keyName} из {path}: {ex.Message}", Color.Red);
+                    AppendLog($"[ERROR] {Loc.LogRegistryDeleteFailed(keyName, path, ex.Message)}", Color.Red);
                 }
             }
 
@@ -887,31 +833,31 @@ namespace InfoWatchUninstaller
         {
             if (!string.IsNullOrEmpty(customCommand))
             {
-                AppendLog($"[*] Пользовательская команда: {customCommand}", Color.Cyan);
+                AppendLog(Loc.LogCustomCommand(customCommand), Color.Cyan);
                 return customCommand;
             }
 
             ProductInfo productInfo = FindProductInfo(productName);
             if (productInfo == null)
             {
-                AppendLog($"[WARN] Продукт '{productName}' не найден в реестре.", Color.Yellow);
+                AppendLog(Loc.LogProductNotFound(productName), Color.Yellow);
                 return null;
             }
 
-            AppendLog($"[*] Найден ключ: {productInfo.KeyName}", Color.Green);
-            AppendLog($"[*] DisplayName: {productInfo.DisplayName}", Color.Cyan);
-            AppendLog($"[*] Тип установщика: {productInfo.InstallerType}", Color.Cyan);
+            AppendLog(Loc.LogKeyFound(productInfo.KeyName), Color.Green);
+            AppendLog(Loc.LogDisplayName(productInfo.DisplayName), Color.Cyan);
+            AppendLog(Loc.LogInstallerType(productInfo.InstallerType.ToString()), Color.Cyan);
 
             if (!string.IsNullOrEmpty(productInfo.QuietUninstallString))
             {
-                AppendLog("[*] Используем QuietUninstallString", Color.Cyan);
+                AppendLog(Loc.LogUsingQuietUninstall, Color.Cyan);
                 return productInfo.QuietUninstallString;
             }
 
             string cmd = productInfo.UninstallString;
             if (string.IsNullOrEmpty(cmd))
             {
-                AppendLog("[ERROR] UninstallString пустая.", Color.Red);
+                AppendLog(Loc.LogUninstallStringEmpty, Color.Red);
                 return null;
             }
 
@@ -990,7 +936,7 @@ namespace InfoWatchUninstaller
                 }
             }
 
-            AppendLog($"[*] Итоговая команда: {cmd}", Color.Cyan);
+            AppendLog(Loc.LogFinalCommand(cmd), Color.Cyan);
             return cmd;
         }
 
@@ -1001,7 +947,7 @@ namespace InfoWatchUninstaller
             _disabledAdapters.Clear();
             try
             {
-                AppendLog("[*] Отключение сетевых адаптеров...", Color.Yellow);
+                AppendLog(Loc.LogNetworkDisabling, Color.Yellow);
                 using (var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_NetworkAdapter WHERE NetEnabled=true AND NetConnectionID != null"))
                 {
                     foreach (ManagementObject adapter in searcher.Get().Cast<ManagementObject>())
@@ -1011,17 +957,17 @@ namespace InfoWatchUninstaller
                         {
                             adapter.InvokeMethod("Disable", null);
                             _disabledAdapters.Add(name);
-                            AppendLog($"  [-] Отключен: {name}", Color.Gray);
+                            AppendLog($"  [-] {Loc.LogNetworkAdapterDisabled(name)}", Color.Gray);
                         }
                         catch { }
                     }
                 }
                 Thread.Sleep(2500);
-                AppendLog("[+] Сеть успешно отключена.", Color.Green);
+                AppendLog(Loc.LogNetworkDisabled, Color.Green);
             }
             catch (Exception ex)
             {
-                AppendLog($"[ERROR] Ошибка отключения сети: {ex.Message}", Color.Red);
+                AppendLog($"[ERROR] {Loc.LogNetworkDisableError(ex.Message)}", Color.Red);
             }
         }
 
@@ -1030,7 +976,7 @@ namespace InfoWatchUninstaller
             if (_disabledAdapters.Count == 0) return;
             try
             {
-                AppendLog("[*] Включение сетевых адаптеров...", Color.Yellow);
+                AppendLog(Loc.LogNetworkEnabling, Color.Yellow);
                 using (var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_NetworkAdapter"))
                 {
                     foreach (ManagementObject adapter in searcher.Get().Cast<ManagementObject>())
@@ -1041,7 +987,7 @@ namespace InfoWatchUninstaller
                             try
                             {
                                 adapter.InvokeMethod("Enable", null);
-                                AppendLog($"  [+] Включен: {name}", Color.Gray);
+                                AppendLog($"  [+] {Loc.LogNetworkAdapterEnabled(name)}", Color.Gray);
                             }
                             catch { }
                         }
@@ -1049,11 +995,11 @@ namespace InfoWatchUninstaller
                 }
                 _disabledAdapters.Clear();
                 Thread.Sleep(2500);
-                AppendLog("[+] Сеть успешно восстановлена.", Color.Green);
+                AppendLog(Loc.LogNetworkEnabled, Color.Green);
             }
             catch (Exception ex)
             {
-                AppendLog($"[ERROR] Ошибка включения сети: {ex.Message}", Color.Red);
+                AppendLog($"[ERROR] {Loc.LogNetworkEnableError(ex.Message)}", Color.Red);
             }
         }
 
@@ -1066,7 +1012,7 @@ namespace InfoWatchUninstaller
             {
                 if (disableNetwork) DisableNetwork();
 
-                AppendLog("[*] Начало операции (прямой запуск).", Color.Cyan);
+                AppendLog(Loc.LogUninstallStartDirect, Color.Cyan);
                 string innerCmd = BuildCommand(productName, customCommand, false);
                 if (string.IsNullOrEmpty(innerCmd)) return;
 
@@ -1074,10 +1020,9 @@ namespace InfoWatchUninstaller
                 string exePath = ExtractExePath(innerCmd);
                 if (!string.IsNullOrEmpty(exePath) && !File.Exists(exePath))
                 {
-                    AppendLog($"[WARN] Файл деинсталлятора не найден: {exePath}", Color.Yellow);
-                    DialogResult removeReg = MessageBox.Show(
-                        $"Файл деинсталлятора не существует:\n{exePath}\n\nПрограмма, возможно, уже удалена. Удалить запись из реестра?",
-                        "Файл не найден",
+                    AppendLog(Loc.LogUninstallerFileNotFound(exePath), Color.Yellow);
+                    DialogResult removeReg = MessageBox.Show(Loc.FileNotFoundDialog(exePath),
+                        Loc.TitleFileNotFound,
                         MessageBoxButtons.YesNo,
                         MessageBoxIcon.Warning);
                     if (removeReg == DialogResult.Yes)
@@ -1085,11 +1030,11 @@ namespace InfoWatchUninstaller
                         ProductInfo prod = FindProductInfo(productName);
                         if (prod != null && RemoveRegistryEntry(prod.KeyName))
                         {
-                            AppendLog("[*] Запись реестра успешно удалена.", Color.Green);
+                            AppendLog(Loc.LogRegistryEntryRemoved, Color.Green);
                             this.Invoke((Action)(() => LoadInstalledProducts()));
                         }
                         else
-                            AppendLog("[ERROR] Не удалось удалить запись реестра.", Color.Red);
+                            AppendLog(Loc.RegistryRemoveFailed, Color.Red);
                     }
                     return; // Выходим, не запуская процесс
                 }
@@ -1102,24 +1047,23 @@ namespace InfoWatchUninstaller
                     CreateNoWindow = false,        // показывать окно консоли
                     WindowStyle = ProcessWindowStyle.Normal
                 };
-                AppendLog($"[*] Запускаем: {psi.FileName} {psi.Arguments}", Color.Yellow);
+                AppendLog(Loc.LogLaunching(psi.FileName, psi.Arguments), Color.Yellow);
                 Process process = Process.Start(psi);
                 if (process == null || process.HasExited)
                 {
-                    AppendLog("[ERROR] Не удалось запустить процесс.", Color.Red);
+                    AppendLog(Loc.ProcessFailedToStart, Color.Red);
                     return;
                 }
-                AppendLog($"[*] Процесс запущен (PID: {process.Id}).", Color.Green);
+                AppendLog(Loc.LogProcessStarted(process.Id), Color.Green);
                 WaitForUninstall(productName, customCommand, maxWait, checkInterval, token);
                 // Ждём завершения процесса (без убийства)
                 process.WaitForExit();
-                AppendLog("[*] Процесс деинсталляции завершён.", Color.Cyan);
+                AppendLog(Loc.LogProcessFinished, Color.Cyan);
 
-                // Проверяем реестр после завершения процесса
                 if (!IsProductInstalled(productName))
-                    AppendLog("[✅] Продукт успешно удалён.", Color.Green);
+                    AppendLog("✅ " + Loc.ProductRemovedSuccess, Color.Green);
                 else
-                    AppendLog("[WARN] Запись реестра не удалена. Возможно, потребуется удалить её вручную через детали программы.", Color.Yellow);
+                    AppendLog(Loc.LogRegistryEntryRemain, Color.Yellow);
             }
             catch (Exception ex) { AppendLog($"[ERROR] {ex.Message}", Color.Red); }
             finally
@@ -1151,27 +1095,27 @@ namespace InfoWatchUninstaller
             {
                 if (disableNetwork) DisableNetwork();
 
-                AppendLog("[*] Начало операции (через службу).", Color.Cyan);
+                AppendLog(Loc.LogUninstallStartService, Color.Cyan);
                 string currentPath = GetServiceImagePath(serviceName);
                 if (string.IsNullOrEmpty(currentPath))
                 {
-                    AppendLog($"[ERROR] Служба '{serviceName}' не найдена.", Color.Red);
+                    AppendLog(Loc.LogServiceNotFound(serviceName), Color.Red);
                     return;
                 }
 
                 if (currentPath.IndexOf("cmd.exe /c", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
-                    AppendLog("[WARN] Служба уже изменена. Попытка восстановить из бэкапа.", Color.Yellow);
+                    AppendLog(Loc.LogServiceAlreadyModified, Color.Yellow);
                     string backup = GetSavedOriginalServicePath(serviceName);
                     if (!string.IsNullOrEmpty(backup))
                     {
                         SetServiceImagePath(serviceName, backup);
-                        AppendLog($"[*] Восстановлен оригинальный ImagePath из бэкапа: {backup}", Color.Cyan);
+                        AppendLog(Loc.LogServiceRestoredFromBackup(backup), Color.Cyan);
                         currentPath = backup;
                     }
                     else
                     {
-                        AppendLog("[ERROR] Бэкап не найден. Невозможно восстановить оригинальный путь. Используйте прямой запуск.", Color.Red);
+                        AppendLog(Loc.LogServiceBackupNotFound, Color.Red);
                         return;
                     }
                 }
@@ -1184,36 +1128,36 @@ namespace InfoWatchUninstaller
                 }
                 string originalPath = savedPath;
 
-                AppendLog($"[*] Оригинальный ImagePath: {originalPath}", Color.Cyan);
+                AppendLog(Loc.LogOriginalImagePath(originalPath), Color.Cyan);
                 string innerCmd = BuildCommand(productName, customCommand);
                 if (string.IsNullOrEmpty(innerCmd)) return;
 
                 string newImagePath = $"cmd.exe /c start /b \"\" {innerCmd}";
-                AppendLog($"[*] Устанавливаем ImagePath = {newImagePath}", Color.Yellow);
+                AppendLog(Loc.LogSettingImagePath(newImagePath), Color.Yellow);
                 SetServiceImagePath(serviceName, newImagePath);
 
-                AppendLog($"[*] Останавливаем службу '{serviceName}'...", Color.Yellow);
+                AppendLog(Loc.LogStoppingService(serviceName), Color.Yellow);
                 StopService(serviceName);
                 serviceStopped = true;
                 Thread.Sleep(3000);
 
-                AppendLog($"[*] Запускаем службу '{serviceName}' — выполнение команды начато.", Color.Green);
+                AppendLog(Loc.LogStartingService(serviceName), Color.Green);
                 bool serviceStarted = StartServiceWithCheck(serviceName);
-                if (!serviceStarted) AppendLog($"[WARN] Служба не запустилась (ошибка 1053?), но команда могла быть отправлена.", Color.Yellow);
+                if (!serviceStarted) AppendLog(Loc.LogServiceStartWarning, Color.Yellow);
 
                 CheckProcess(innerCmd);
                 WaitForUninstall(productName, customCommand, maxWait, checkInterval, token);
 
                 string restorePath = GetSavedOriginalServicePath(serviceName) ?? originalPath;
-                AppendLog($"[*] Восстанавливаем оригинальный ImagePath: {restorePath}", Color.Yellow);
+                AppendLog(Loc.LogRestoringImagePath(restorePath), Color.Yellow);
                 SetServiceImagePath(serviceName, restorePath);
 
-                AppendLog($"[*] Перезапускаем службу '{serviceName}'...", Color.Yellow);
+                AppendLog(Loc.LogRestartingService(serviceName), Color.Yellow);
                 StopService(serviceName);
                 Thread.Sleep(2000);
                 bool restartOk = StartServiceWithCheck(serviceName);
-                if (!restartOk) AppendLog($"[WARN] Не удалось перезапустить службу.", Color.Yellow);
-                else AppendLog("[+] Операция завершена. Служба восстановлена.", Color.Green);
+                if (!restartOk) AppendLog(Loc.LogServiceRestartFailed, Color.Yellow);
+                else AppendLog(Loc.LogServiceRestored, Color.Green);
             }
             catch (Exception ex) { AppendLog($"[ERROR] {ex.Message}", Color.Red); }
             finally
@@ -1226,7 +1170,7 @@ namespace InfoWatchUninstaller
                         string current = GetServiceImagePath(serviceName);
                         if (current != restorePath)
                         {
-                            AppendLog($"[*] Принудительное восстановление из бэкапа в finally.", Color.Yellow);
+                            AppendLog(Loc.LogForceRestoreBackup, Color.Yellow);
                             SetServiceImagePath(serviceName, restorePath);
                             if (serviceStopped)
                             {
@@ -1251,22 +1195,22 @@ namespace InfoWatchUninstaller
             {
                 if (disableNetwork) DisableNetwork();
 
-                AppendLog("[*] Начало операции (SYSTEM-запуск).", Color.Cyan);
+                AppendLog(Loc.LogUninstallStartSystem, Color.Cyan);
                 string innerCmd = BuildCommand(productName, customCommand);
                 if (string.IsNullOrEmpty(innerCmd)) return;
 
                 string fullCmd = $"cmd.exe /c {innerCmd}";
-                AppendLog($"[*] Запуск от SYSTEM: {fullCmd}", Color.Yellow);
+                AppendLog(Loc.LogSystemLaunch(fullCmd), Color.Yellow);
 
                 int pid = SystemProcessLauncher.LaunchProcessAsSystem(fullCmd);
                 if (pid > 0)
                 {
-                    AppendLog($"[*] Процесс запущен (PID: {pid}).", Color.Green);
+                    AppendLog(Loc.LogProcessStarted(pid), Color.Green);
                     WaitForUninstall(productName, customCommand, maxWait, checkInterval, token);
                 }
                 else
                 {
-                    AppendLog($"[ERROR] Не удалось запустить процесс от SYSTEM. Код ошибки: {pid}", Color.Red);
+                    AppendLog(Loc.LogSystemLaunchFailed(pid), Color.Red);
                 }
             }
             catch (Exception ex) { AppendLog($"[ERROR] {ex.Message}", Color.Red); }
@@ -1293,7 +1237,7 @@ namespace InfoWatchUninstaller
                 btnUninstall.Enabled = true;
                 btnStop.Enabled = false;
             }
-            lblStatus.Invoke((Action)(() => { lblStatus.Text = "Готов к работе"; lblStatus.ForeColor = Color.DarkGreen; }));
+            lblStatus.Invoke((Action)(() => { lblStatus.Text = Loc.StatusReady; lblStatus.ForeColor = Color.DarkGreen; }));
         }
 
         // ========== РАБОТА СО СЛУЖБОЙ ==========
@@ -1310,7 +1254,7 @@ namespace InfoWatchUninstaller
             string keyPath = $@"SYSTEM\CurrentControlSet\Services\{serviceName}";
             using (RegistryKey key = Registry.LocalMachine.OpenSubKey(keyPath, true))
             {
-                if (key == null) throw new Exception($"Не удалось открыть раздел реестра для {serviceName}");
+                if (key == null) throw new Exception(Loc.ServiceRegistryOpenFailed(serviceName));
                 key.SetValue("ImagePath", newPath, RegistryValueKind.ExpandString);
             }
         }
@@ -1350,7 +1294,7 @@ namespace InfoWatchUninstaller
             }
             catch (Exception ex)
             {
-                AppendLog($"[ERROR] Ошибка при запуске службы '{serviceName}': {ex.Message}", Color.Red);
+                AppendLog(Loc.LogServiceError(serviceName, ex.Message), Color.Red);
                 return false;
             }
         }
@@ -1374,8 +1318,8 @@ namespace InfoWatchUninstaller
                 if (Process.GetProcessesByName(processName).Length > 0) { found = true; break; }
                 Thread.Sleep(500);
             }
-            if (found) AppendLog($"[*] Процесс {processName} запущен.", Color.Green);
-            else AppendLog($"[WARN] Процесс {processName} не обнаружен.", Color.Yellow);
+            if (found) AppendLog(Loc.LogProcessStartedName(processName), Color.Green);
+            else AppendLog(Loc.LogProcessNotFound(processName), Color.Yellow);
         }
 
         // ========== ЖУРНАЛ И ОЖИДАНИЕ ==========
@@ -1385,13 +1329,13 @@ namespace InfoWatchUninstaller
             int elapsed = 0;
             if (string.IsNullOrEmpty(customCommand))
             {
-                AppendLog($"[⏳] Ожидание завершения деинсталляции (макс. {maxWait} сек)...", Color.Yellow);
+                AppendLog(Loc.LogWaitUninstall(maxWait), Color.Yellow);
                 bool uninstalled = false;
                 while (elapsed < maxWait)
                 {
                     if (token.IsCancellationRequested)
                     {
-                        AppendLog("[⏹] Ожидание прервано пользователем.", Color.Orange);
+                        AppendLog(Loc.LogWaitInterrupted, Color.Orange);
                         break;
                     }
 
@@ -1400,30 +1344,30 @@ namespace InfoWatchUninstaller
 
                     if (!IsProductInstalled(productName))
                     {
-                        AppendLog($"[✅] Продукт '{productName}' успешно удалён!", Color.Green);
+                        AppendLog(Loc.LogProductRemoved(productName), Color.Green);
                         uninstalled = true;
                         this.Invoke((Action)(() => LoadInstalledProducts()));
                         break;
                     }
-                    AppendLog($"    [{elapsed}/{maxWait}] Продукт ещё присутствует...", Color.Gray);
+                    AppendLog($"    [{elapsed}/{maxWait}] {Loc.LogProductStillPresent}", Color.Gray);
                 }
                 if (!uninstalled && !token.IsCancellationRequested)
-                    AppendLog("[WARN] Достигнут таймаут.", Color.Yellow);
+                    AppendLog(Loc.LogTimeout, Color.Yellow);
             }
             else
             {
-                AppendLog($"[*] Пользовательская команда запущена. Ожидание {maxWait} секунд...", Color.Yellow);
+                AppendLog(Loc.LogCustomCommandWait(maxWait), Color.Yellow);
                 for (int i = 0; i < maxWait; i++)
                 {
                     if (token.IsCancellationRequested)
                     {
-                        AppendLog("[⏹] Ожидание прервано пользователем.", Color.Orange);
+                        AppendLog(Loc.LogWaitInterrupted, Color.Orange);
                         break;
                     }
                     Thread.Sleep(1000);
                 }
                 if (!token.IsCancellationRequested)
-                    AppendLog("[*] Ожидание завершено.", Color.Gray);
+                    AppendLog(Loc.LogWaitComplete, Color.Gray);
             }
         }
 
@@ -1458,7 +1402,7 @@ namespace InfoWatchUninstaller
 
         private void InitializeComponent()
         {
-            this.Text = "Информация о продукте";
+            this.Text = Loc.ProductDetailsTitle;
             this.StartPosition = FormStartPosition.CenterParent;
             this.Size = new Size(550, 480);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -1468,22 +1412,22 @@ namespace InfoWatchUninstaller
             var panel = new Panel { AutoScroll = true, Dock = DockStyle.Fill, Padding = new Padding(10) };
             int y = 10, labelWidth = 120, valueLeft = 130, fieldWidth = 340, lineHeight = 30;
 
-            AddLabelValue(panel, "Название:", product.DisplayName, ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
-            AddLabelValue(panel, "Разработчик:", product.Publisher ?? "неизвестно", ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
-            AddLabelValue(panel, "Версия:", product.DisplayVersion ?? "не указана", ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
+            AddLabelValue(panel, Loc.DetailName, product.DisplayName, ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
+            AddLabelValue(panel, Loc.DetailPublisher, product.Publisher ?? Loc.Unknown, ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
+            AddLabelValue(panel, Loc.DetailVersion, product.DisplayVersion ?? Loc.NotSpecified, ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
             string formattedDate = FormatInstallDate(product.InstallDate);
-            AddLabelValue(panel, "Дата установки:", formattedDate ?? "не указана", ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
+            AddLabelValue(panel, Loc.DetailInstallDate, formattedDate ?? Loc.NotSpecified, ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
             string sizeStr = FormatSize(product.EstimatedSize);
-            AddLabelValue(panel, "Размер (КБ):", sizeStr, ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
-            AddLabelValue(panel, "Установлено в:", product.InstallLocation ?? "не указано", ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
-            AddLabelValue(panel, "Ключ реестра:", product.KeyName, ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
-            AddLabelValue(panel, "Тип установщика:", product.InstallerType.ToString(), ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
-            AddLabelValue(panel, "Команда удаления:", product.UninstallString ?? "отсутствует", ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
-            AddLabelValue(panel, "Тихая команда:", product.QuietUninstallString ?? "отсутствует", ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
+            AddLabelValue(panel, Loc.DetailSize, sizeStr, ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
+            AddLabelValue(panel, Loc.DetailLocation, product.InstallLocation ?? Loc.NotSpecifiedM, ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
+            AddLabelValue(panel, Loc.DetailRegistryKey, product.KeyName, ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
+            AddLabelValue(panel, Loc.DetailInstallerType, product.InstallerType.ToString(), ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
+            AddLabelValue(panel, Loc.DetailUninstallCmd, product.UninstallString ?? Loc.Absent, ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
+            AddLabelValue(panel, Loc.DetailQuietCmd, product.QuietUninstallString ?? Loc.Absent, ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
 
             var btnCopy = new Button
             {
-                Text = "Копировать команду удаления",
+                Text = Loc.CopyUninstallCmd,
                 Location = new Point(valueLeft, y + 10),
                 Width = 200,
                 Height = 30
@@ -1493,14 +1437,14 @@ namespace InfoWatchUninstaller
                 if (!string.IsNullOrEmpty(product.UninstallString))
                 {
                     Clipboard.SetText(product.UninstallString);
-                    MessageBox.Show("Команда удаления скопирована в буфер обмена.");
+                    MessageBox.Show(Loc.UninstallCmdCopied);
                 }
-                else MessageBox.Show("Команда удаления не найдена.");
+                else MessageBox.Show(Loc.UninstallCmdNotFound);
             };
 
             var btnUseForUninstall = new Button
             {
-                Text = "Использовать для удаления",
+                Text = Loc.UseForUninstall,
                 Location = new Point(valueLeft + 210, y + 10),
                 Width = 180,
                 Height = 30
@@ -1508,7 +1452,7 @@ namespace InfoWatchUninstaller
             btnUseForUninstall.Click += (s, e) => { this.DialogResult = DialogResult.OK; this.Close(); };
             var btnDeleteRegistry = new Button
             {
-                Text = "Удалить запись в реестре",
+                Text = Loc.DeleteRegistryEntry,
                 Location = new Point(valueLeft + 10, y + 50), // y – последнее значение после тихой команды
                 Width = 200,
                 Height = 30
@@ -1516,21 +1460,20 @@ namespace InfoWatchUninstaller
             btnDeleteRegistry.Click += (s, e) =>
             {
                 if (MessageBox.Show(
-                    $"Вы уверены, что хотите удалить запись реестра для \"{product.DisplayName}\"?\n" +
-                    "Это не удалит файлы программы, но уберёт её из списка установленных.",
-                    "Подтверждение удаления записи",
+                    Loc.ConfirmDeleteRegistry(product.DisplayName),
+                    Loc.TitleConfirmRegistryDelete,
                     MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
                 {
                     if (ownerForm.RemoveRegistryEntry(product.KeyName))
                     {
                         ownerForm.LoadInstalledProducts();
-                        MessageBox.Show("Запись успешно удалена.", "Готово", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        this.DialogResult = DialogResult.OK; // сигнал обновить список
+                        MessageBox.Show(Loc.RegistryDeleted, Loc.TitleDone, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        this.DialogResult = DialogResult.OK;
                         this.Close();
                     }
                     else
                     {
-                        MessageBox.Show("Не удалось удалить запись. Возможно, недостаточно прав.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        MessageBox.Show(Loc.RegistryDeleteFailed, Loc.TitleError, MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                 }
             };
@@ -1570,12 +1513,12 @@ namespace InfoWatchUninstaller
 
         private string FormatSize(string estimatedSizeKb)
         {
-            if (string.IsNullOrEmpty(estimatedSizeKb)) return "не указан";
+            if (string.IsNullOrEmpty(estimatedSizeKb)) return Loc.NotSpecifiedSize;
             if (int.TryParse(estimatedSizeKb, out int kb))
             {
-                if (kb >= 1048576) return $"{kb / 1048576.0:F2} ГБ";
-                if (kb >= 1024) return $"{kb / 1024.0:F2} МБ";
-                return $"{kb} КБ";
+                if (kb >= 1048576) return Loc.SizeGb(kb / 1048576.0);
+                if (kb >= 1024) return Loc.SizeMb(kb / 1024.0);
+                return Loc.SizeKb(kb);
             }
             return estimatedSizeKb;
         }
@@ -1588,18 +1531,14 @@ namespace InfoWatchUninstaller
         static void Main()
         {
             Application.EnableVisualStyles();
+            //System.Threading.Thread.CurrentThread.CurrentUICulture = new System.Globalization.CultureInfo("en-US");
             Application.SetCompatibleTextRenderingDefault(false);
 
             if (!IsAdministrator())
             {
                 DialogResult result = MessageBox.Show(
-                    "Программа требует права администратора для:\n" +
-                    "• управления службами Windows\n" +
-                    "• доступа к реестру (удаление/изменение)\n" +
-                    "• отключения сетевых адаптеров\n\n" +
-                    "Нажмите «Да», чтобы перезапустить программу с повышенными правами.\n" +
-                    "Если у вас нет прав администратора, обратитесь к системному администратору.",
-                    "Требуются права администратора",
+                    Loc.AdminStartupMessage,
+                    Loc.TitleAdminRequired,
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Information);
 
@@ -1619,9 +1558,8 @@ namespace InfoWatchUninstaller
                     catch
                     {
                         MessageBox.Show(
-                            "Не удалось получить права администратора.\n" +
-                            "Убедитесь, что ваша учётная запись имеет права администратора, или запустите программу вручную от имени администратора.",
-                            "Ошибка",
+                            Loc.AdminStartupFailed,
+                            Loc.TitleError,
                             MessageBoxButtons.OK,
                             MessageBoxIcon.Error);
                         Application.Exit();
