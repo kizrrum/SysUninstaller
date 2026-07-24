@@ -1,3 +1,5 @@
+[Русская версия](README.ru.md)
+
 # SysUninstaller
 
 **A universal tool for forced uninstallation of programs in Windows.**
@@ -37,10 +39,6 @@ Three uninstall methods, smart update checking, registry cleanup, and full contr
 ![Main window](main_window.png)
 
 ## Build from Source
-
-## Скриншот
-
-![Главное окно программы](main_window.png)
 
 ## Сборка из исходников
 
