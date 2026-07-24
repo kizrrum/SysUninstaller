@@ -266,6 +266,8 @@ namespace InfoWatchUninstaller
             this.Text = "Деинсталлятор (служба / прямой / SYSTEM)";
             this.StartPosition = FormStartPosition.CenterScreen;
             this.Size = new Size(1050, 650);
+            // Проверка обновлений через 2 секунды после запуска, чтобы не тормозить загрузку формы
+            System.Threading.Tasks.Task.Delay(2000).ContinueWith(_ => UpdateChecker.CheckForUpdates((msg, color) => AppendLog(msg, color)));
         }
 
         private void InitializeComponent()
@@ -275,7 +277,7 @@ namespace InfoWatchUninstaller
             // Левая часть
             Label lblProduct = new Label { Text = "Имя продукта (для поиска):", Location = new Point(20, 20), AutoSize = true };
             Label lblService = new Label { Text = "Имя службы-посредника:", Location = new Point(20, 60), AutoSize = true };
-            Label lblCommand = new Label { Text = "Команда для выполнения (опционально):", Location = new Point(20, 100), AutoSize = true };
+            Label lblCommand = new Label { Text = "Команда для выполнения (опцион.):", Location = new Point(20, 100), AutoSize = true };
             Label lblMaxWait = new Label { Text = "Макс. время ожидания (сек):", Location = new Point(20, 140), AutoSize = true };
             Label lblInterval = new Label { Text = "Интервал проверки (сек):", Location = new Point(20, 180), AutoSize = true };
 
@@ -1406,7 +1408,7 @@ namespace InfoWatchUninstaller
         {
             this.Text = "Информация о продукте";
             this.StartPosition = FormStartPosition.CenterParent;
-            this.Size = new Size(500, 420);
+            this.Size = new Size(550, 480);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
