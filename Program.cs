@@ -1421,6 +1421,7 @@ namespace InfoWatchUninstaller
     }
 
     // ---------- Форма деталей продукта ----------
+    // ---------- Форма деталей продукта ----------
     internal class ProductDetailsForm : Form
 
     {
@@ -1557,6 +1558,7 @@ namespace InfoWatchUninstaller
             return estimatedSizeKb;
         }
     }
+
 
     // ---------- Точка входа ----------
     internal static class Program
