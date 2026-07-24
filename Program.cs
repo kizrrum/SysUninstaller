@@ -283,6 +283,38 @@ namespace InfoWatchUninstaller
             txtServiceName = new TextBox { Location = new Point(220, 57), Width = 250, Text = "Spooler" };
             txtCustomCommand = new TextBox { Location = new Point(220, 97), Width = 350 };
 
+            // Тултипы для полей ввода и их меток
+            toolTip.SetToolTip(lblProduct,
+                "Введите часть названия программы, которую хотите удалить.\n" +
+                "Можно также выбрать программу из списка справа — имя подставится автоматически.");
+
+
+            toolTip.SetToolTip(lblService,
+                "Служба Windows, ImagePath которой будет временно заменён на команду удаления.\n" +
+                "Актуально только для метода «Через службу».");
+
+
+            toolTip.SetToolTip(lblCommand,
+                "Пользовательская команда, которая будет выполнена вместо автоматически сгенерированной.\n" +
+                "Оставьте поле пустым, чтобы программа сама определила команду удаления.");
+
+
+            // Тултипы для текстовых полей — через MouseHover, чтобы гарантированно показывались
+            txtProductName.MouseHover += (s, ev) => {
+                toolTip.Show("Поиск продукта в реестре Uninstall по подстроке.\nНапример, «InfoWatch» найдёт «InfoWatch Device Monitor».", txtProductName);
+            };
+            txtProductName.MouseLeave += (s, ev) => toolTip.Hide(txtProductName);
+
+            txtServiceName.MouseHover += (s, ev) => {
+                toolTip.Show("Рекомендуется использовать некритичную службу (Spooler, wuauserv, upnphost).\nНе используйте системные службы, от которых зависит стабильность ОС.", txtServiceName);
+            };
+            txtServiceName.MouseLeave += (s, ev) => toolTip.Hide(txtServiceName);
+
+            txtCustomCommand.MouseHover += (s, ev) => {
+                toolTip.Show("Можно указать путь к EXE, BAT, CMD или любую консольную команду.\nИспользуйте кнопку «Обзор…» для выбора файла.", txtCustomCommand);
+            };
+            txtCustomCommand.MouseLeave += (s, ev) => toolTip.Hide(txtCustomCommand);
+
             btnBrowseCommand = new Button { Text = "Обзор…", Location = new Point(580, 95), Width = 80, Height = 25 };
             btnBrowseCommand.Click += BtnBrowseCommand_Click;
 
