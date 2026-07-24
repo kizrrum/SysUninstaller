@@ -42,3 +42,6 @@ Three uninstall methods, smart update checking, registry cleanup, and full contr
 
 ```bash
 git clone https://github.com/kizrrum/SysUninstaller.git
+## Disclaimer
+
+**⚠️ Use at your own risk.** The author is not responsible for any damage caused by the use of this software. You are solely responsible for compliance with all applicable laws and regulations.
