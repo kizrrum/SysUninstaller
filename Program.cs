@@ -207,7 +207,8 @@ namespace InfoWatchUninstaller
         AdvancedInstaller,
         WixBurn,
         Adobe,
-        Cisco
+        Cisco,
+        Appx
     }
 
     // ---------- Информация о продукте ----------
@@ -249,6 +250,10 @@ namespace InfoWatchUninstaller
         private TextBox txtSearchFilter;
         private bool isRunning = false;
         private ToolTip toolTip;
+        private Button btnShowUwp;
+        private Button btnDeleteAllUwp;
+        private bool showingUwp = false;
+
 
         // Методы удаления
         private enum UninstallMethod { Service, Direct, SystemImpersonation }
@@ -284,6 +289,7 @@ namespace InfoWatchUninstaller
             txtProductName = new TextBox { Location = new Point(220, 17), Width = 250, Text = "InfoWatch" };
             txtServiceName = new TextBox { Location = new Point(220, 57), Width = 250, Text = "Spooler" };
             txtCustomCommand = new TextBox { Location = new Point(220, 97), Width = 350 };
+            txtCustomCommand.TextChanged += TxtCustomCommand_TextChanged;
 
             // Тултипы для полей ввода и их меток
             toolTip.SetToolTip(lblProduct, Loc.TooltipProductLabel);
@@ -409,6 +415,34 @@ namespace InfoWatchUninstaller
             lstInstalledApps.SelectedIndexChanged += LstInstalledApps_SelectedIndexChanged;
             lstInstalledApps.DoubleClick += LstInstalledApps_DoubleClick;
 
+
+            // Кнопка для отображения UWP
+            btnShowUwp = new Button
+            {
+                Text = Loc.ShowUwpButton,
+                Location = new Point(840, 75),   // справа от кнопки "Обновить список"
+                Width = 170,
+                Height = 28
+            };
+            btnShowUwp.Click += BtnShowUwp_Click;
+            toolTip.SetToolTip(btnShowUwp, Loc.TooltipShowUwp);
+
+            btnDeleteAllUwp = new Button
+            {
+                Text = Loc.DeleteAllUwp,
+                Location = new Point(700, 525),   // под списком
+                Width = 310,
+                Height = 30,
+                Visible = false   // изначально не видна
+            };
+            btnDeleteAllUwp.Click += BtnDeleteAllUwp_Click;
+
+
+
+            Controls.Add(btnDeleteAllUwp);
+
+            Controls.Add(btnShowUwp);
+
             // Тултип для списка приложений
             toolTip.SetToolTip(lstInstalledApps, Loc.TooltipInstalledAppsList);
             toolTip.SetToolTip(lblInstalledApps, Loc.TooltipInstalledAppsLabel);
@@ -424,13 +458,173 @@ namespace InfoWatchUninstaller
             lblInstalledApps, txtSearchFilter, btnRefreshList, lstInstalledApps
         });
         }
-
+        private void TxtCustomCommand_TextChanged(object sender, EventArgs e)
+        {
+            if (!string.IsNullOrEmpty(txtCustomCommand.Text.Trim()))
+                btnUninstall.Text = Loc.ExecuteButton; // "Выполнить" / "Execute"
+            else
+                btnUninstall.Text = Loc.UninstallButton; // "Запустить деинсталляцию" / "Start uninstall"
+        }
         // ========== ОБРАБОТЧИКИ ==========
+
+        private void BtnShowUwp_Click(object sender, EventArgs e)
+        {
+            showingUwp = true;
+            txtSearchFilter.Text = "";    // сбрасываем фильтр
+            LoadUwpList();
+            btnDeleteAllUwp.Visible = true;
+        }
 
         private void BtnRefreshList_Click(object sender, EventArgs e)
         {
-            LoadInstalledProducts();
+            showingUwp = false;
+            btnDeleteAllUwp.Visible = false;
+            LoadInstalledProducts();   // загружаем обычные программы
         }
+        private void LstInstalledApps_DoubleClick(object sender, EventArgs e)
+        {
+            if (lstInstalledApps.SelectedItem is ProductInfo product)
+            {
+                if (showingUwp)
+                {
+                    DeleteSingleUwp(product);
+                }
+                else
+                {
+                    using (var detailsForm = new ProductDetailsForm(product, this))
+                    {
+                        if (detailsForm.ShowDialog(this) == DialogResult.OK)
+                        {
+                            txtProductName.Text = product.DisplayName;
+                            AppendLog(Loc.LogSelectedForUninstall(product.DisplayName), Color.Cyan);
+                        }
+                    }
+                }
+            }
+        }
+
+        private List<ProductInfo> LoadAppxPackages()
+        {
+            var packages = new List<ProductInfo>();
+            try
+            {
+                using (Process ps = new Process())
+                {
+                    ps.StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "powershell.exe",
+                        Arguments = "-NoProfile -Command \"Get-AppxPackage -AllUsers | Select-Object Name, PackageFullName, Version, Publisher, InstallLocation | ConvertTo-Csv -NoTypeInformation\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        RedirectStandardOutput = true,
+                        WindowStyle = ProcessWindowStyle.Hidden
+                    };
+                    ps.Start();
+                    string output = ps.StandardOutput.ReadToEnd();
+                    ps.WaitForExit();
+
+                    using (var reader = new StringReader(output))
+                    {
+                        // Пропускаем заголовок CSV (первая строка)
+                        string header = reader.ReadLine();
+                        if (header == null) return packages;
+
+                        while (reader.Peek() != -1)
+                        {
+                            string line = reader.ReadLine();
+                            if (string.IsNullOrWhiteSpace(line)) continue;
+
+                            // Простейший парсинг CSV (без учёта вложенных кавычек)
+                            string[] parts = line.Split(',');
+                            if (parts.Length < 5) continue;
+
+                            packages.Add(new ProductInfo
+                            {
+                                KeyName = parts[1].Trim('"'),                // PackageFullName
+                                DisplayName = parts[0].Trim('"'),            // Name
+                                Publisher = parts[3].Trim('"'),              // Publisher
+                                DisplayVersion = parts[2].Trim('"'),         // Version
+                                InstallLocation = parts[4].Trim('"'),        // InstallLocation
+                                UninstallString = $"Remove-AppxPackage -Package \"{parts[1].Trim('"')}\"",
+                                QuietUninstallString = null,
+                                InstallerType = InstallerType.Appx
+                            });
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"[Appx] Error: {ex.Message}", Color.Red);
+            }
+            return packages;
+        }
+
+        private void LoadUwpList()
+        {
+            lstInstalledApps.Items.Clear();
+            var uwpList = LoadAppxPackages();   // метод из предыдущих ответов (загрузка через PowerShell)
+            foreach (var p in uwpList)
+                lstInstalledApps.Items.Add(p);
+            AppendLog($"Загружено {uwpList.Count} UWP‑приложений.", Color.Green);
+        }
+        private void DeleteSingleUwp(ProductInfo product)
+        {
+            // Формируем команду, которая пытается удалить, игнорируя ошибки
+            string command = $"Get-AppxPackage -AllUsers | Where-Object {{ $_.PackageFullName -eq '{product.KeyName}' }} | Remove-AppxPackage -ErrorAction SilentlyContinue";
+            ExecutePowerShellCommand(command); // выполняем, не проверяем результат
+            LoadUwpList();                     // обновляем список
+
+            // Проверяем, остался ли пакет
+            bool stillExists = lstInstalledApps.Items.Cast<ProductInfo>().Any(p => p.KeyName == product.KeyName);
+            if (!stillExists)
+                AppendLog(Loc.UwpDeleteSuccess, Color.Green);
+            else
+                AppendLog(Loc.UwpDeleteFailed("Пакет не может быть удалён (возможно, это системный компонент Windows)."), Color.Orange);
+        }
+
+        private void BtnDeleteAllUwp_Click(object sender, EventArgs e)
+        {
+            if (MessageBox.Show(Loc.ConfirmDeleteAllUwp, Loc.TitleConfirmRegistryDelete,
+                MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                return;
+
+            //string command = "Get-AppxPackage -AllUsers | Remove-AppxPackage";
+            string command = "Get-AppxPackage -AllUsers | Remove-AppxPackage -ErrorAction SilentlyContinue";
+            ExecutePowerShellCommand(command);
+            LoadUwpList();   // обновить список
+        }
+
+        private void ExecutePowerShellCommand(string command)
+        {
+            try
+            {
+                string base64Command = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(command));
+                ProcessStartInfo psi = new ProcessStartInfo
+                {
+                    FileName = "powershell.exe",
+                    Arguments = $"-NoProfile -EncodedCommand {base64Command}",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                };
+                using (Process p = Process.Start(psi))
+                {
+                    // Ждём не более 30 секунд (безопасный таймаут)
+                    p.WaitForExit(30000);
+                    // Выходные потоки мы больше не читаем – они содержат только CLIXML
+                    // и не нужны для определения успеха.
+                }
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"[UWP] {ex.Message}", Color.Red);
+            }
+        }
+
+
 
         private void TxtSearchFilter_TextChanged(object sender, EventArgs e)
         {
@@ -446,20 +640,6 @@ namespace InfoWatchUninstaller
             }
         }
 
-        private void LstInstalledApps_DoubleClick(object sender, EventArgs e)
-        {
-            if (lstInstalledApps.SelectedItem is ProductInfo product)
-            {
-                using (var detailsForm = new ProductDetailsForm(product, this))
-                {
-                    if (detailsForm.ShowDialog(this) == DialogResult.OK)
-                    {
-                        txtProductName.Text = product.DisplayName;
-                        AppendLog(Loc.LogSelectedForUninstall(product.DisplayName), Color.Cyan);
-                    }
-                }
-            }
-        }
 
         private void BtnBrowseCommand_Click(object sender, EventArgs e)
         {
@@ -613,7 +793,17 @@ namespace InfoWatchUninstaller
 
                 lock (_syncLock)
                 {
-                    _allProducts.AddRange(tempList.OrderBy(p => p.DisplayName));
+                    // Удаляем дубликаты по DisplayName (без учёта регистра)
+                    var uniqueProducts = tempList
+                        .GroupBy(p => p.DisplayName, StringComparer.OrdinalIgnoreCase)
+                        .Select(g => g.First())
+                        .OrderBy(p => p.DisplayName)
+                        .ToList();
+
+                    lock (_syncLock)
+                    {
+                        _allProducts.AddRange(uniqueProducts);
+                    }
                 }
                 FilterInstalledApps();
                 AppendLog(string.Format(Loc.LogLoaded, _allProducts.Count), Color.Green);
@@ -1427,6 +1617,9 @@ namespace InfoWatchUninstaller
     {
         private readonly ProductInfo product;
         private readonly MainForm ownerForm;  // Ссылка на главную форму для вызова удаления
+        private TextBox txtUninstallCmd;
+        private TextBox txtQuietCmd;
+        private TextBox txtInstallLocation;
 
         public ProductDetailsForm(ProductInfo productInfo, MainForm owner)
         {
@@ -1454,12 +1647,65 @@ namespace InfoWatchUninstaller
             AddLabelValue(panel, Loc.DetailInstallDate, formattedDate ?? Loc.NotSpecified, ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
             string sizeStr = FormatSize(product.EstimatedSize);
             AddLabelValue(panel, Loc.DetailSize, sizeStr, ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
-            AddLabelValue(panel, Loc.DetailLocation, product.InstallLocation ?? Loc.NotSpecifiedM, ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
+
+            // Сохраняем TextBox для пути установки
+            txtInstallLocation = AddLabelValue(panel, Loc.DetailLocation, product.InstallLocation ?? Loc.NotSpecifiedM, ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
+
             AddLabelValue(panel, Loc.DetailRegistryKey, product.KeyName, ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
             AddLabelValue(panel, Loc.DetailInstallerType, product.InstallerType.ToString(), ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
-            AddLabelValue(panel, Loc.DetailUninstallCmd, product.UninstallString ?? Loc.Absent, ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
-            AddLabelValue(panel, Loc.DetailQuietCmd, product.QuietUninstallString ?? Loc.Absent, ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
 
+            // Сохраняем TextBox'ы для команд
+            txtUninstallCmd = AddLabelValue(panel, Loc.DetailUninstallCmd, product.UninstallString ?? Loc.Absent, ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
+            txtQuietCmd = AddLabelValue(panel, Loc.DetailQuietCmd, product.QuietUninstallString ?? Loc.Absent, ref y, labelWidth, valueLeft, fieldWidth, lineHeight);
+
+            // ----- Проверка существования файлов/папок -----
+            Action<TextBox, string, bool> CheckPath = (textBox, path, isDir) =>
+            {
+                if (!string.IsNullOrEmpty(path))
+                {
+                    bool exists = isDir ? Directory.Exists(path) : File.Exists(path);
+                    if (!exists)
+                    {
+                        textBox.Text += "  ❌ (не найден)";
+                        textBox.ForeColor = Color.Red;
+                    }
+                    else
+                    {
+                        textBox.Text += "  ✅";
+                        textBox.ForeColor = Color.Green;
+                    }
+                }
+            };
+
+            // Проверка UninstallString (извлекаем путь к файлу)
+            string uninstallFile = ExtractExePath(product.UninstallString);
+            if (!string.IsNullOrEmpty(uninstallFile))
+                CheckPath(txtUninstallCmd, uninstallFile, false);
+            else if (!string.IsNullOrEmpty(product.UninstallString) &&
+                     product.UninstallString.IndexOf("msiexec", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                txtUninstallCmd.Text += "  (msiexec)";
+                txtUninstallCmd.ForeColor = Color.DarkGreen;
+            }
+
+            // Проверка QuietUninstallString
+            string quietFile = ExtractExePath(product.QuietUninstallString);
+            if (!string.IsNullOrEmpty(quietFile))
+                CheckPath(txtQuietCmd, quietFile, false);
+            else if (!string.IsNullOrEmpty(product.QuietUninstallString) &&
+                     product.QuietUninstallString.IndexOf("msiexec", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                txtQuietCmd.Text += "  (msiexec)";
+                txtQuietCmd.ForeColor = Color.DarkGreen;
+            }
+
+            // Проверка InstallLocation (папка)
+            string installDir = product.InstallLocation;
+            if (!string.IsNullOrEmpty(installDir))
+                CheckPath(txtInstallLocation, installDir, true);
+            // ------------------------------------------------
+
+            // Кнопки
             var btnCopy = new Button
             {
                 Text = Loc.CopyUninstallCmd,
@@ -1485,10 +1731,11 @@ namespace InfoWatchUninstaller
                 Height = 30
             };
             btnUseForUninstall.Click += (s, e) => { this.DialogResult = DialogResult.OK; this.Close(); };
+
             var btnDeleteRegistry = new Button
             {
                 Text = Loc.DeleteRegistryEntry,
-                Location = new Point(valueLeft + 10, y + 50), // y – последнее значение после тихой команды
+                Location = new Point(valueLeft + 10, y + 50),
                 Width = 200,
                 Height = 30
             };
@@ -1513,20 +1760,53 @@ namespace InfoWatchUninstaller
                 }
             };
 
-
             panel.Controls.Add(btnCopy);
             panel.Controls.Add(btnUseForUninstall);
             panel.Controls.Add(btnDeleteRegistry);
             this.Controls.Add(panel);
         }
 
-        private void AddLabelValue(Panel parent, string labelText, string value, ref int y, int labelWidth, int valueLeft, int fieldWidth, int lineHeight)
+        private string ExtractExePath(string uninstallString)
         {
-            Label lbl = new Label { Text = labelText, Location = new Point(10, y), Size = new Size(labelWidth - 10, lineHeight), TextAlign = ContentAlignment.MiddleRight, Font = new Font("Microsoft Sans Serif", 8.5f) };
-            TextBox txt = new TextBox { Text = value, Location = new Point(valueLeft, y), Size = new Size(fieldWidth, lineHeight), ReadOnly = true, Font = new Font("Consolas", 8.5f), BackColor = SystemColors.Control };
+            if (string.IsNullOrEmpty(uninstallString)) return null;
+            string trimmed = uninstallString.Trim();
+            if (trimmed.StartsWith("\""))
+            {
+                int endQuote = trimmed.IndexOf("\"", 1);
+                if (endQuote > 0) return trimmed.Substring(1, endQuote - 1);
+            }
+            else
+            {
+                int spaceIndex = trimmed.IndexOf(' ');
+                if (spaceIndex > 0) return trimmed.Substring(0, spaceIndex);
+                else return trimmed;
+            }
+            return null;
+        }
+
+        private TextBox AddLabelValue(Panel parent, string labelText, string value, ref int y, int labelWidth, int valueLeft, int fieldWidth, int lineHeight)
+        {
+            Label lbl = new Label
+            {
+                Text = labelText,
+                Location = new Point(10, y),
+                Size = new Size(labelWidth - 10, lineHeight),
+                TextAlign = ContentAlignment.MiddleRight,
+                Font = new Font("Microsoft Sans Serif", 8.5f, FontStyle.Bold)   // жирный шрифт
+            };
+            TextBox txt = new TextBox
+            {
+                Text = value,
+                Location = new Point(valueLeft, y),
+                Size = new Size(fieldWidth, lineHeight),
+                ReadOnly = true,
+                Font = new Font("Consolas", 8.5f),
+                BackColor = SystemColors.ControlLightLight
+            };
             parent.Controls.Add(lbl);
             parent.Controls.Add(txt);
             y += lineHeight + 4;
+            return txt;   // важно: возвращаем TextBox
         }
 
         private string FormatInstallDate(string rawDate)
