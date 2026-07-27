@@ -240,5 +240,19 @@ namespace InfoWatchUninstaller
         public static string SizeGb(double value) => IsRussian ? $"{value:F2} ГБ" : $"{value:F2} GB";
         public static string SizeMb(double value) => IsRussian ? $"{value:F2} МБ" : $"{value:F2} MB";
         public static string SizeKb(int kb) => IsRussian ? $"{kb} КБ" : $"{kb} KB";
+        public static string ExecuteButton => IsRussian ? "Выполнить" : "Execute";
+        public static string ShowUwpButton => IsRussian ? "UWP‑приложения" : "UWP apps";
+        public static string DeleteAllUwp => IsRussian ? "Удалить все UWP" : "Delete all UWP";
+        public static string TooltipShowUwp => IsRussian
+            ? "Показать список установленных UWP‑приложений (приложения из Microsoft Store)."
+            : "Show list of installed UWP applications (Microsoft Store apps).";
+        public static string ConfirmDeleteAllUwp => IsRussian
+            ? "Вы уверены, что хотите удалить ВСЕ UWP‑приложения? Это действие нельзя отменить."
+            : "Are you sure you want to delete ALL UWP applications? This cannot be undone.";
+        public static string UwpDeleteSuccess => IsRussian ? "UWP‑приложение успешно удалено." : "UWP app removed successfully.";
+        public static string UwpDeleteFailed(string error) => IsRussian
+            ? $"Ошибка при удалении UWP-приложения: {error}"
+            : $"Error removing UWP app: {error}";
+
     }
 }
